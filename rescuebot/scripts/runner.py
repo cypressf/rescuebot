@@ -25,7 +25,11 @@ class Controller:
 
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
-        # TODO
+        #Currently just appends valid numbers
+        valid_ranges = []
+        for i in range(5): #if it sees anything within 5 meters, it is valid, throwout greater values
+            if msg.ranges[i] > 0 and msg.ranges[i] < 360: #You can make this any range..
+                valid_ranges.append(msg.ranges[i])
 
     def run(self):
         """Subscribe to the laser scan data and images."""
