@@ -6,6 +6,30 @@ import cv_bridge
 import sys
 import signal
 
+class image_converter:
+  def __init__(self):
+    self.image_pub = rospy.Publisher("/processed_image",Image)
+    self.target_pub = rospy.Publisher("/target_coords",Vector3)
+
+    self.bridge = CvBridge()
+    self.image_sub = rospy.Subscriber("/camera/image_raw",Image,self.callback)
+    self.target_location = None
+
+  def callback(self,data):
+    try:
+      cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+    except CvBridgeError, e:
+      print e
+
+    #TODO Image Processing
+
+    try:
+      self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
+      if self.target_location:
+        self.target_pub.publish(self.target_location)
+    except CvBridgeError, e:
+      print e
+
 
 class Controller:
     def __init__(self):
@@ -18,6 +42,8 @@ class Controller:
         self.cmd_vel = Twist()
         signal.signal(signal.SIGINT, self.stop_neato)
 
+        self.valid_ranges = []
+
     def image_received(self, image_message):
         """Process image from camera(s)"""
         cv_image = self.bridge.imgmsg_to_cv2(image_message, desired_encoding="bgr8")
@@ -26,7 +52,7 @@ class Controller:
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
         #Currently just appends valid numbers
-        valid_ranges = []
+        self.valid_ranges = []
         for i in range(5): #if it sees anything within 5 meters, it is valid, throwout greater values
             if msg.ranges[i] > 0 and msg.ranges[i] < 360: #You can make this any range..
                 valid_ranges.append(msg.ranges[i])
