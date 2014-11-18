@@ -172,10 +172,11 @@ class Controller:
         self.laser_scan_sub = None
         self.bridge = cv_bridge.CvBridge()
         self.running = False
-        self.cmd_vel = Twist()
+        self.msg_wall = Twist()
         signal.signal(signal.SIGINT, self.stop_neato)
 
         self.valid_ranges = []
+        self.side = None
 
     def image_received(self, image_message):
         """Process image from camera(s)"""
@@ -189,14 +190,68 @@ class Controller:
             if msg.ranges[i] > 0 and msg.ranges[i] < 360: #You can make this any range..
                 valid_ranges.append(msg.ranges[i])
 
+        #Process some of the data
+        lead_left_distance = []
+        lead_right_distance = []
+        trailing_left_distance = []
+        trailing_right_distance = []
+        self.lead_left_avg
+        self.lead_right_avg
+        self.trailing_left_avg
+        self.trailing_right_avg
+        for i in range(11):
+            if laser_scan_message.ranges[i+40] > 0 and laser_scan_message.ranges[i+40] < 2:
+                lead_left_distance.append(laser_scan_message.ranges[i+40])
+            if laser_scan_message.ranges[i+130] > 0 and laser_scan_message.ranges[i+130] < 2:
+                trailing_left_distance.append(laser_scan_message.ranges[i+130])
+            if laser_scan_message.ranges[i+310] > 0 and laser_scan_message.ranges[i+310] < 2:
+                lead_right_distance.append(laser_scan_message.ranges[i+310])
+            if laser_scan_message.ranges[i+220] > 0 and laser_scan_message.ranges[i+220] < 2:
+                trailing_right_distance.append(laser_scan_message.ranges[i+220])
+        if len(lead_left_distance)+len(trailing_left_distance) > len(trailing_right_distance)+len(lead_right_distance):
+            self.lead_left_avg = sum(lead_left_distance)/float(len(lead_left_distance)+0.1)
+            self.trailing_left_avg = sum(trailing_left_distance)/float(len(trailing_left_distance)+0.1)
+            self.side = 'left'
+        else:
+            self.lead_right_avg = sum(lead_right_distance)/float(len(lead_right_distance)+0.1)
+            self.trailing_right_avg = sum(trailing_right_distance)/float(len(trailing_right_distance)+0.1)
+            self.side = 'right'
+
     def run(self):
         """Subscribe to the laser scan data and images."""
         self.running = True
         self.laser_scan_sub = rospy.Subscriber('scan', LaserScan, self.laser_scan_received)
-        self.img_sub = rospy.Subscriber('camera/image_raw', Image, self.image_received)
+        self.img_sub = rospy.Subscriber('camera/image_raw', Image, self.image_received)        
         rate = rospy.Rate(20)
+
+        #start the wall following
+        if self.side == 'right':
+            right_prop_dist = 0.3*(self.lead_right_avg - self.trailing_right_avg)
+            if self.lead_right_avg < 1.0- 0.1 and self.lead_right_avg != 0:
+                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.1/(0.5*(self.lead_right_avg)))) 
+            elif self.lead_right_avg > 1.0 +0.1:
+                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,-0.1/(0.5*(self.lead_right_avg)))) 
+            else:
+                if self.lead_right_avg - 0.1 < self.trailing_right_avg and self.lead_right_avg + 0.1 > self.trailing_right_avg:
+                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.0))
+                else:
+                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,right_prop_dist))
+        elif self.side == 'left':
+            left_prop_dist = 0.3*(self.lead_left_avg - self.trailing_left_avg)
+            if self.lead_left_avg < 1.0- 0.1 and self.lead_left_avg != 0:
+                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,-0.1/(0.5*(self.lead_left_avg))))
+            elif self.lead_left_avg > 1.0 +0.1:
+                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.1/(0.5*(self.lead_left_avg)))) 
+            else:
+                if self.lead_left_avg - 0.1 < self.trailing_left_avg and self.lead_left_avg + 0.1 > self.trailing_left_avg:
+                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.0))
+                else:
+                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,-left_prop_dist))                
+        else:
+            msg_wall = Twist(Vector3(0.0,0.0,0.0), Vector3(0.0,0.0,0.0)) 
+
         while not rospy.is_shutdown() and self.running:
-            self.pub.publish(self.cmd_vel)
+            self.pub.publish(self.msg_wall)
             rate.sleep()
 
     def stop_neato(self, signal, frame):
@@ -207,8 +262,13 @@ class Controller:
 
 
 if __name__ == "__main__":
-    controller = Controller()
+    rospy.init_node('controller', anonymous=True)
+    ic = image_converter()
+    rescuebot = Controller()
+    star_center = OccupancyGridMapper()
     try:
-        controller.run()
+        star_center.run()
+        image_converter.run()
+        rescuebot.run()
     except rospy.ROSInterruptException:
         pass
