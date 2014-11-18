@@ -18,7 +18,7 @@ class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
     def __init__(self):
         cv2.namedWindow("map")
-        rospy.init_node("occupancy_grid_mapper")
+        #rospy.init_node("occupancy_grid_mapper")
         self.origin = [-10, -10]
         self.seq = 0
         self.resolution = .1
@@ -177,6 +177,10 @@ class Controller:
 
         self.valid_ranges = []
         self.side = None
+        self.lead_left_avg = 0
+        self.lead_right_avg = 0
+        self.trailing_left_avg = 0
+        self.trailing_right_avg = 0
 
     def image_received(self, image_message):
         """Process image from camera(s)"""
@@ -187,18 +191,14 @@ class Controller:
         #Currently just appends valid numbers
         self.valid_ranges = []
         for i in range(5): #if it sees anything within 5 meters, it is valid, throwout greater values
-            if msg.ranges[i] > 0 and msg.ranges[i] < 360: #You can make this any range..
-                valid_ranges.append(msg.ranges[i])
+            if laser_scan_message.ranges[i] > 0 and laser_scan_message.ranges[i] < 360: #You can make this any range..
+                self.valid_ranges.append(laser_scan_message.ranges[i])
 
         #Process some of the data
         lead_left_distance = []
         lead_right_distance = []
         trailing_left_distance = []
         trailing_right_distance = []
-        self.lead_left_avg
-        self.lead_right_avg
-        self.trailing_left_avg
-        self.trailing_right_avg
         for i in range(11):
             if laser_scan_message.ranges[i+40] > 0 and laser_scan_message.ranges[i+40] < 2:
                 lead_left_distance.append(laser_scan_message.ranges[i+40])
@@ -219,6 +219,7 @@ class Controller:
 
     def run(self):
         """Subscribe to the laser scan data and images."""
+        print "I'm running"
         self.running = True
         self.laser_scan_sub = rospy.Subscriber('scan', LaserScan, self.laser_scan_received)
         self.img_sub = rospy.Subscriber('camera/image_raw', Image, self.image_received)        
@@ -262,13 +263,12 @@ class Controller:
 
 
 if __name__ == "__main__":
-    rospy.init_node('controller', anonymous=True)
-    ic = image_converter()
+    #ic = image_converter()
     rescuebot = Controller()
-    star_center = OccupancyGridMapper()
+    #star_center = OccupancyGridMapper()
     try:
-        star_center.run()
-        image_converter.run()
+        #star_center.run()
+        #image_converter.run()
         rescuebot.run()
     except rospy.ROSInterruptException:
         pass
