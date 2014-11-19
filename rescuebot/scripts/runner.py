@@ -185,7 +185,7 @@ class Controller:
 
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
-        # Currently just appends valid numbers
+
         self.valid_ranges = []
         for i in range(5):  # if it sees anything within 5 meters, it is valid, throwout greater values
             if 0 < laser_scan_message.ranges[i] < 360:  # You can make this any range..
@@ -216,37 +216,41 @@ class Controller:
             self.side = 'right'
 
     def follow_wall(self):
+        linear_velocity = self.lin_speed
+
         if self.side == 'right':
             right_prop_dist = (self.lead_right_avg - self.trailing_right_avg)
             if self.lead_right_avg < 1.0 - 0.1 and self.lead_right_avg != 0:
-                cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, self.lead_right_avg))
+                angular_velocity = self.lead_right_avg
                 print("move towards")
             elif self.lead_right_avg > 1.0 + 0.1:
-                cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, -self.lead_right_avg))
+                angular_velocity = -self.lead_right_avg
                 print("move away")
             else:
                 if self.lead_right_avg - 0.1 < self.trailing_right_avg < 0.1 + self.lead_right_avg:
-                    cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
+                    angular_velocity = 0.0
                     print("Straight Ahead")
                 else:
-                    cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, right_prop_dist))
+                    angular_velocity = right_prop_dist
                     print("Maintain")
+
         elif self.side == 'left':
             print("Left!")
             left_prop_dist = (self.lead_left_avg - self.trailing_left_avg)
             if self.lead_left_avg < 1.0 - 0.1 and self.lead_left_avg != 0:
-                cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, -self.lead_left_avg))
+                angular_velocity = -self.lead_left_avg
             elif self.lead_left_avg > 1.0 + 0.1:
-                cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, self.lead_left_avg))
+                angular_velocity = self.lead_left_avg
             else:
                 if self.lead_left_avg - 0.1 < self.trailing_left_avg < 0.1 + self.lead_left_avg:
-                    cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
+                    angular_velocity = 0.0
                 else:
-                    cmd_vel = Twist(Vector3(self.lin_speed, 0.0, 0.0), Vector3(0.0, 0.0, -left_prop_dist))
+                    angular_velocity = -left_prop_dist
         else:
-            cmd_vel = Twist(Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
+            linear_velocity = 0.0
+            angular_velocity = 0.0
 
-        return cmd_vel
+        return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
 
     def run(self):
         """Subscribe to the laser scan data and images."""
