@@ -134,10 +134,6 @@ class OccupancyGridMapper:
         angles = euler_from_quaternion(orientation_tuple)
         return (pose.position.x, pose.position.y, angles[2])
 
-    def run(self):
-        r = rospy.Rate(10)
-        while not(rospy.is_shutdown()):
-            r.sleep()
 
 class image_converter:
   def __init__(self):
@@ -166,8 +162,9 @@ class image_converter:
 
 class Controller:
     def __init__(self):
-        rospy.init_node('controller', anonymous=True)
+        #rospy.init_node('controller', anonymous=True)
         self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+        rospy.Subscriber("scan", LaserScan, self.laser_scan_received, queue_size=1)
         self.img_sub = None
         self.laser_scan_sub = None
         self.bridge = cv_bridge.CvBridge()
@@ -181,6 +178,9 @@ class Controller:
         self.lead_right_avg = 0
         self.trailing_left_avg = 0
         self.trailing_right_avg = 0
+
+        self.lin_speed = 0.2
+        self.spin_speed = 0.5
 
     def image_received(self, image_message):
         """Process image from camera(s)"""
@@ -216,44 +216,47 @@ class Controller:
             self.lead_right_avg = sum(lead_right_distance)/float(len(lead_right_distance)+0.1)
             self.trailing_right_avg = sum(trailing_right_distance)/float(len(trailing_right_distance)+0.1)
             self.side = 'right'
+        self.run()
 
     def run(self):
         """Subscribe to the laser scan data and images."""
-        print "I'm running"
+        #print "I'm running"
         self.running = True
-        self.laser_scan_sub = rospy.Subscriber('scan', LaserScan, self.laser_scan_received)
         self.img_sub = rospy.Subscriber('camera/image_raw', Image, self.image_received)        
         rate = rospy.Rate(20)
 
         #start the wall following
         if self.side == 'right':
-            right_prop_dist = 0.3*(self.lead_right_avg - self.trailing_right_avg)
+            right_prop_dist = (self.lead_right_avg - self.trailing_right_avg)
             if self.lead_right_avg < 1.0- 0.1 and self.lead_right_avg != 0:
-                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.1/(0.5*(self.lead_right_avg)))) 
+                self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,(self.lead_right_avg))) 
+                print "move towards"
             elif self.lead_right_avg > 1.0 +0.1:
-                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,-0.1/(0.5*(self.lead_right_avg)))) 
+                self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,-(self.lead_right_avg)))
+                print "move away" 
             else:
                 if self.lead_right_avg - 0.1 < self.trailing_right_avg and self.lead_right_avg + 0.1 > self.trailing_right_avg:
-                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.0))
+                    self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,0.0))
+                    print "Straight Ahead"
                 else:
-                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,right_prop_dist))
+                    self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,right_prop_dist))
+                    print "Maintain"
         elif self.side == 'left':
-            left_prop_dist = 0.3*(self.lead_left_avg - self.trailing_left_avg)
+            print "Left!"
+            left_prop_dist = (self.lead_left_avg - self.trailing_left_avg)
             if self.lead_left_avg < 1.0- 0.1 and self.lead_left_avg != 0:
-                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,-0.1/(0.5*(self.lead_left_avg))))
+                self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,-(self.lead_left_avg)))
             elif self.lead_left_avg > 1.0 +0.1:
-                msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.1/(0.5*(self.lead_left_avg)))) 
+                self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,(self.lead_left_avg))) 
             else:
                 if self.lead_left_avg - 0.1 < self.trailing_left_avg and self.lead_left_avg + 0.1 > self.trailing_left_avg:
-                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,0.0))
+                    self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,0.0))
                 else:
-                    msg_wall = Twist(Vector3(0.1,0.0,0.0), Vector3(0.0,0.0,-left_prop_dist))                
+                    self.msg_wall = Twist(Vector3(self.lin_speed,0.0,0.0), Vector3(0.0,0.0,-left_prop_dist))                
         else:
-            msg_wall = Twist(Vector3(0.0,0.0,0.0), Vector3(0.0,0.0,0.0)) 
+            self.msg_wall = Twist(Vector3(0.0,0.0,0.0), Vector3(0.0,0.0,0.0)) 
 
-        while not rospy.is_shutdown() and self.running:
-            self.pub.publish(self.msg_wall)
-            rate.sleep()
+        self.pub.publish(self.msg_wall)
 
     def stop_neato(self, signal, frame):
         """Stop the neato in case of signal interrupt."""
@@ -262,13 +265,14 @@ class Controller:
         sys.exit(0)
 
 
-if __name__ == "__main__":
-    #ic = image_converter()
-    rescuebot = Controller()
-    #star_center = OccupancyGridMapper()
-    try:
-        #star_center.run()
-        #image_converter.run()
-        rescuebot.run()
-    except rospy.ROSInterruptException:
-        pass
+def main(args):
+  rospy.init_node('image_converter', anonymous=True)
+  #ic = image_converter()
+  rescuebot = Controller()
+  star_center = OccupancyGridMapper()
+  try:
+    rospy.spin()
+  except rospy.ROSInterruptException: pass
+
+if __name__ == '__main__':
+    main(sys.argv)
