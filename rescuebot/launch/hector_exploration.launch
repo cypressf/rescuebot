@@ -1,0 +1,6 @@
+<launch>
+  <include file="$(find neato_2dnav)/launch/hector_mapping_neato.launch" />
+  <node name="hector_costmap" pkg="hector_costmap" type="hector_costmap" />
+  <include file="$(find hector_exploration_node)/launch/exploration_planner.launch" />
+  <node name="simple_exploration_controller" pkg="hector_exploration_controller" type="simple_exploration_controller" />
+</launch>
