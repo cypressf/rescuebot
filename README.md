@@ -14,11 +14,7 @@ rosrun rescuebot runner.py
 roscore
 roslaunch rescuebot neato_simulator.launch
 rviz
-roslaunch neato_2dnav hector_mapping_neato.launch
-rosrun hector_costmap hector_costmap
-roslaunch hector_exploration_node exploration_planner.launch
-rosrun teleop_twist_keyboard teleop_twist_keyboard.py
-rosrun hector_exploration_controller simple_exploration_controller
+roslaunch rescuebot hector_exploration.launch
 ```
 
 Now add /hector_exploration_node/global_costmap/costmap topic to rviz so you can see what hector exploration is thinking.
