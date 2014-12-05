@@ -133,7 +133,7 @@ class OccupancyGridMapper:
 
         # draw the circle
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
-        cv2.circle(im, (self.y_transform+y_odom_index, self.x_transform+x_odom_index), 2, (255, 255, 0))
+        cv2.circle(im, (self.depth+y_odom_index, self.x_transform+x_odom_index), 2, (255, 255, 0))
         # display the image resized
         cv2.imshow("map", cv2.resize(im, (500, 500)))
         cv2.waitKey(20)
@@ -145,7 +145,7 @@ class OccupancyGridMapper:
 
         depth_proportion = -0.025
         depth_intercept = 1.35
-        self.depth = r*depth_proportion + depth_intercept
+        self.depth = int(r*depth_proportion + depth_intercept)
         #print depth
         self.y_transform = int(self.frame_height/2 - y)
         self.x_transform = int(x-self.frame_width/2)
