@@ -34,6 +34,7 @@ class OccupancyGridMapper:
         self.pub = rospy.Publisher("map", OccupancyGrid)
         self.tf_listener = TransformListener()
         self.move_sub  = rospy.Subscriber('ball_coords', Vector3, self.coordinate_to_map)
+        self.color_sub = rospy.Subscriber('color', Vector3, self.process_color, queue_size=1)
         self.frame_height = 480
         self.frame_width = 640
         self.depth = 0
@@ -41,6 +42,7 @@ class OccupancyGridMapper:
         self.y_transform = 0
         self.x_transform = 0
         self.angle_diff = 0
+        self.color = (0,0,0)
 
     def is_in_map(self, x_ind, y_ind):
         """ Return whether or not the given point is within the map boundaries """
@@ -48,6 +50,9 @@ class OccupancyGridMapper:
                     x_ind > self.origin[0] + self.n * self.resolution or
                     y_ind < self.origin[1] or
                     y_ind > self.origin[1] + self.n * self.resolution)
+
+    def process_color(self, msg):
+        self.color = (int(msg.x), int(msg.y), int(msg.z))
 
     def process_scan(self, msg):
         """ Callback function for the laser scan messages """
@@ -131,9 +136,15 @@ class OccupancyGridMapper:
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
+        x_camera = int((x_odom_index + self.y_transform*self.resolution)) 
+        y_camera = int((y_odom_index + self.depth*self.resolution))
+
+        print x_camera
+        print y_camera
+
         # draw the circle
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
-        cv2.circle(im, (self.depth+y_odom_index, self.x_transform+x_odom_index), 2, (255, 255, 0))
+        cv2.circle(im, (y_camera, x_camera), 2, (250,250,0))
         # display the image resized
         cv2.imshow("map", cv2.resize(im, (500, 500)))
         cv2.waitKey(20)
@@ -143,8 +154,8 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
-        depth_proportion = -0.025
-        depth_intercept = 1.35
+        depth_proportion = -2.5
+        depth_intercept = 1
         self.depth = int(r*depth_proportion + depth_intercept)
         #print depth
         self.y_transform = int(self.frame_height/2 - y)
@@ -164,10 +175,12 @@ class image_converter:
         print "I'm initialized!"
         self.image_pub = rospy.Publisher("/processed_image",Image)
         self.ball_pub = rospy.Publisher("/ball_coords",Vector3)
+        self.color_pub = rospy.Publisher("/color", Vector3)
 
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/camera/image_raw",Image,self.callback)
         self.ball_location = None
+        self.color = None
 
     def callback(self,data):
         try:
@@ -185,6 +198,8 @@ class image_converter:
             self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
             if self.ball_location:
                 self.ball_pub.publish(self.ball_location)
+            if self.color:
+                self.color_pub.publish(self.color)
         except CvBridgeError, e:
             print e
 
@@ -201,7 +216,7 @@ class image_converter:
         upper_blue = np.array([150, 255, 255])
         mask_blue = cv2.inRange(hsv_img, lower_blue, upper_blue)
 
-        lower_yellow = np.array([25, 150, 125])
+        lower_yellow = np.array([25, 25, 25])
         upper_yellow = np.array([30, 255, 255])
         mask_yellow = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
 
@@ -238,6 +253,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
+                    self.color = Vector3(255, 255, 0)
 
                 if mean_blue[0] > 50:
                     #print mean
@@ -249,6 +265,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
+                    self.color = Vector3(0,0,255)
 
                 if mean_red[0] > 100:
                     #print mean
@@ -260,6 +277,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
+                    self.color = Vector3(255, 0, 0)
 
                 if mean_green[0] > 50:
                     #print mean
@@ -271,6 +289,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location 
+                    self.color = Vector3(0, 255, 0)
 
 
 class Controller:
@@ -333,20 +352,20 @@ class Controller:
             right_prop_dist = (self.lead_right_avg - self.trailing_right_avg)
             if self.lead_right_avg < 1.0 - 0.1 and self.lead_right_avg != 0:
                 angular_velocity = self.lead_right_avg
-                print("move towards")
+                # print("move towards")
             elif self.lead_right_avg > 1.0 + 0.1:
                 angular_velocity = -self.lead_right_avg
-                print("move away")
+                # print("move away")
             else:
                 if self.lead_right_avg - 0.1 < self.trailing_right_avg < 0.1 + self.lead_right_avg:
                     angular_velocity = 0.0
-                    print("Straight Ahead")
+                    # print("Straight Ahead")
                 else:
                     angular_velocity = right_prop_dist
-                    print("Maintain")
+                    # print("Maintain")
 
         elif self.side == 'left':
-            print("Left!")
+            # print("Left!")
             left_prop_dist = (self.lead_left_avg - self.trailing_left_avg)
             if self.lead_left_avg < 1.0 - 0.1 and self.lead_left_avg != 0:
                 angular_velocity = -self.lead_left_avg
