@@ -18,3 +18,9 @@ roslaunch rescuebot hector_exploration.launch
 ```
 
 Now add /hector_exploration_node/global_costmap/costmap topic to rviz so you can see what hector exploration is thinking.
+
+To adjust hector navigation parameters while it is running, open rqt_reconfigure.
+
+```
+rosrun rqt_reconfigure rqt_reconfigure
+```
