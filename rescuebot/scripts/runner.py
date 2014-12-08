@@ -136,15 +136,15 @@ class OccupancyGridMapper:
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
-        x_camera = int((x_odom_index + self.y_transform*self.resolution)) 
-        y_camera = int((y_odom_index + self.depth*self.resolution))
+        x_camera = x_odom_index + int(((-self.x_transform + self.odom_pose[0])-self.origin[0]) * self.resolution) 
+        y_camera = y_odom_index + int(((-self.depth + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
         print x_camera
         print y_camera
 
         # draw the circle
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
-        cv2.circle(im, (y_camera, x_camera), 2, (250,250,0))
+        cv2.circle(im, (y_camera, x_camera), 2, self.color)
         # display the image resized
         cv2.imshow("map", cv2.resize(im, (500, 500)))
         cv2.waitKey(20)
@@ -154,8 +154,8 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
-        depth_proportion = -2.5
-        depth_intercept = 1
+        depth_proportion = -.025
+        depth_intercept = 1.35
         self.depth = int(r*depth_proportion + depth_intercept)
         #print depth
         self.y_transform = int(self.frame_height/2 - y)
@@ -253,7 +253,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
-                    self.color = Vector3(255, 255, 0)
+                    self.color = Vector3(0, 255, 255)
 
                 if mean_blue[0] > 50:
                     #print mean
@@ -265,7 +265,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
-                    self.color = Vector3(0,0,255)
+                    self.color = Vector3(255,0,0)
 
                 if mean_red[0] > 100:
                     #print mean
@@ -277,7 +277,7 @@ class image_converter:
                     location = Vector3(c[0], c[1],c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
-                    self.color = Vector3(255, 0, 0)
+                    self.color = Vector3(0, 0, 255)
 
                 if mean_green[0] > 50:
                     #print mean
