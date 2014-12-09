@@ -139,8 +139,8 @@ class OccupancyGridMapper:
         x_camera = x_odom_index + int(((-self.x_transform + self.odom_pose[0])-self.origin[0]) * self.resolution) 
         y_camera = y_odom_index + int(((-self.depth + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
-        print x_camera
-        print y_camera
+        print(x_camera)
+        print(y_camera)
 
         # draw the circle
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
@@ -172,7 +172,7 @@ class OccupancyGridMapper:
 
 class ImageConverter:
     def __init__(self):
-        print "I'm initialized!"
+        print("I'm initialized!")
         self.image_pub = rospy.Publisher("/processed_image",Image)
         self.ball_pub = rospy.Publisher("/ball_coords",Vector3)
         self.color_pub = rospy.Publisher("/color", Vector3)
@@ -185,8 +185,8 @@ class ImageConverter:
     def callback(self,data):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError, e:
-            print e
+        except CvBridgeError as e:
+            print(e)
 
         #Image Processing
         blur = cv2.medianBlur(cv_image,7)
@@ -200,8 +200,8 @@ class ImageConverter:
                 self.ball_pub.publish(self.ball_location)
             if self.color:
                 self.color_pub.publish(self.color)
-        except CvBridgeError, e:
-            print e
+        except CvBridgeError as e:
+            print(e)
 
     def find_circles(self,img_src,img_out):
         """Finds and plots circles using Hough Circle detection."""
