@@ -299,7 +299,6 @@ class Controller:
         signal.signal(signal.SIGINT, self.stop_neato)
         rospy.Subscriber("scan", LaserScan, self.laser_scan_received, queue_size=1)
 
-        self.valid_ranges = []
         self.side = None
         self.lead_left_avg = 0
         self.lead_right_avg = 0
@@ -311,11 +310,6 @@ class Controller:
 
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
-
-        self.valid_ranges = []
-        for i in range(5):  # if it sees anything within 5 meters, it is valid, throwout greater values
-            if 0 < laser_scan_message.ranges[i] < 360:  # You can make this any range..
-                self.valid_ranges.append(laser_scan_message.ranges[i])
 
         # Process some of the data
         lead_left_distance = []
