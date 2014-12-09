@@ -170,7 +170,7 @@ class OccupancyGridMapper:
         return pose.position.x, pose.position.y, angles[2]
 
 
-class image_converter:
+class ImageConverter:
     def __init__(self):
         print "I'm initialized!"
         self.image_pub = rospy.Publisher("/processed_image",Image)
@@ -401,7 +401,7 @@ class Controller:
 
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
-    ic = image_converter()
+    ic = ImageConverter()
     rescuebot = Controller()
     star_center = OccupancyGridMapper()
     try:
