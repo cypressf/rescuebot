@@ -222,7 +222,6 @@ class ImageConverter:
         upper_green = np.array([90, 255, 255])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
-        location = None
         if circles is not None:
             for c in circles[0, :]:
                 ROI_red = mask_red[c[1] - c[2]:c[1] + c[2], c[0] - c[2]:c[0] + c[2]]
@@ -248,9 +247,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 255), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 255), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(0, 255, 255)
 
                 if mean_blue[0] > 50:
@@ -260,9 +258,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (255, 0, 0), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (255, 0, 0), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(255, 0, 0)
 
                 if mean_red[0] > 100:
@@ -272,9 +269,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (0, 0, 255), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(0, 0, 255)
 
                 if mean_green[0] > 50:
@@ -284,9 +280,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 0), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 0), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(0, 255, 0)
 
 
@@ -301,7 +296,6 @@ class Controller:
         signal.signal(signal.SIGINT, self.stop_neato)
         rospy.Subscriber("scan", LaserScan, self.laser_scan_received, queue_size=1)
 
-        self.valid_ranges = []
         self.side = None
         self.lead_left_avg = 0
         self.lead_right_avg = 0
@@ -313,11 +307,6 @@ class Controller:
 
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
-
-        self.valid_ranges = []
-        for i in range(5):  # if it sees anything within 5 meters, it is valid, throwout greater values
-            if 0 < laser_scan_message.ranges[i] < 360:  # You can make this any range..
-                self.valid_ranges.append(laser_scan_message.ranges[i])
 
         # Process some of the data
         lead_left_distance = []
