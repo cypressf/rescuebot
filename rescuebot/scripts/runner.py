@@ -33,7 +33,7 @@ class OccupancyGridMapper:
         rospy.Subscriber("scan", LaserScan, self.process_scan, queue_size=1)
         self.pub = rospy.Publisher("map", OccupancyGrid)
         self.tf_listener = TransformListener()
-        self.move_sub  = rospy.Subscriber('ball_coords', Vector3, self.coordinate_to_map)
+        self.move_sub = rospy.Subscriber('ball_coords', Vector3, self.coordinate_to_map)
         self.color_sub = rospy.Subscriber('color', Vector3, self.process_color, queue_size=1)
         self.frame_height = 480
         self.frame_width = 640
@@ -42,7 +42,7 @@ class OccupancyGridMapper:
         self.y_transform = 0
         self.x_transform = 0
         self.angle_diff = 0
-        self.color = (0,0,0)
+        self.color = (0, 0, 0)
 
     def is_in_map(self, x_ind, y_ind):
         """ Return whether or not the given point is within the map boundaries """
@@ -136,7 +136,7 @@ class OccupancyGridMapper:
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
-        x_camera = x_odom_index + int(((-self.x_transform + self.odom_pose[0])-self.origin[0]) * self.resolution) 
+        x_camera = x_odom_index + int(((-self.x_transform + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         y_camera = y_odom_index + int(((-self.depth + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
         print(x_camera)
@@ -156,10 +156,10 @@ class OccupancyGridMapper:
 
         depth_proportion = -.025
         depth_intercept = 1.35
-        self.depth = int(r*depth_proportion + depth_intercept)
+        self.depth = int(r * depth_proportion + depth_intercept)
         #print depth
-        self.y_transform = int(self.frame_height/2 - y)
-        self.x_transform = int(x-self.frame_width/2)
+        self.y_transform = int(self.frame_height / 2 - y)
+        self.x_transform = int(x - self.frame_width / 2)
         self.angle_diff = self.x_transform
 
     @staticmethod
@@ -173,26 +173,26 @@ class OccupancyGridMapper:
 class ImageConverter:
     def __init__(self):
         print("I'm initialized!")
-        self.image_pub = rospy.Publisher("/processed_image",Image)
-        self.ball_pub = rospy.Publisher("/ball_coords",Vector3)
+        self.image_pub = rospy.Publisher("/processed_image", Image)
+        self.ball_pub = rospy.Publisher("/ball_coords", Vector3)
         self.color_pub = rospy.Publisher("/color", Vector3)
 
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("/camera/image_raw",Image,self.callback)
+        self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
         self.ball_location = None
         self.color = None
 
-    def callback(self,data):
+    def callback(self, data):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
             print(e)
 
         #Image Processing
-        blur = cv2.medianBlur(cv_image,7)
+        blur = cv2.medianBlur(cv_image, 7)
         gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 5, 50)
-        self.find_circles(edges,cv_image)
+        self.find_circles(edges, cv_image)
 
         try:
             self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
@@ -203,9 +203,10 @@ class ImageConverter:
         except CvBridgeError as e:
             print(e)
 
-    def find_circles(self,img_src,img_out):
+    def find_circles(self, img_src, img_out):
         """Finds and plots circles using Hough Circle detection."""
-        circles = cv2.HoughCircles(img_src, cv2.cv.CV_HOUGH_GRADIENT, 1, img_src.shape[0]/8, param1=10, param2=30, minRadius=40, maxRadius=75)
+        circles = cv2.HoughCircles(img_src, cv2.cv.CV_HOUGH_GRADIENT, 1, img_src.shape[0] / 8, param1=10, param2=30,
+                                   minRadius=40, maxRadius=75)
         hsv_img = cv2.cvtColor(img_out, cv2.COLOR_BGR2HSV)
 
         lower_red = np.array([150, 55, 55])
@@ -226,69 +227,69 @@ class ImageConverter:
 
         location = None
         if circles is not None:
-            for c in circles[0,:]:
-                ROI_red = mask_red[c[1]-c[2]:c[1]+c[2], c[0]-c[2]:c[0]+c[2]]
+            for c in circles[0, :]:
+                ROI_red = mask_red[c[1] - c[2]:c[1] + c[2], c[0] - c[2]:c[0] + c[2]]
                 mean_red = cv2.mean(ROI_red)
 
-                ROI_green = mask_green[c[1]-c[2]:c[1]+c[2], c[0]-c[2]:c[0]+c[2]]
+                ROI_green = mask_green[c[1] - c[2]:c[1] + c[2], c[0] - c[2]:c[0] + c[2]]
                 mean_green = cv2.mean(ROI_green)
 
-                ROI_yellow = mask_yellow[c[1]-c[2]:c[1]+c[2], c[0]-c[2]:c[0]+c[2]]
+                ROI_yellow = mask_yellow[c[1] - c[2]:c[1] + c[2], c[0] - c[2]:c[0] + c[2]]
                 mean_yellow = cv2.mean(ROI_yellow)
 
-                ROI_blue = mask_blue[c[1]-c[2]:c[1]+c[2], c[0]-c[2]:c[0]+c[2]]
+                ROI_blue = mask_blue[c[1] - c[2]:c[1] + c[2], c[0] - c[2]:c[0] + c[2]]
                 mean_blue = cv2.mean(ROI_blue)
 
-                cv2.circle(img_out,(c[0],c[1]),c[2],(0,255,0),1)
+                cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 0), 1)
                 # draw the center of the circle
-                cv2.circle(img_out,(c[0],c[1]),2,(0,0,255),3)
+                cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
 
                 if mean_yellow[0] > 150:
                     #print mean
-                    cv2.rectangle(img_out, (c[0]-c[2], c[1]+c[2]), (c[0]+c[2],c[1]-c[2]) , (0,255,255), 2)
+                    cv2.rectangle(img_out, (c[0] - c[2], c[1] + c[2]), (c[0] + c[2], c[1] - c[2]), (0, 255, 255), 2)
                     # draw the outer circle
-                    cv2.circle(img_out,(c[0],c[1]),c[2],(0,255,255),5)
+                    cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 255), 5)
                     # draw the center of the circle
-                    cv2.circle(img_out,(c[0],c[1]),2,(0,255,255),3)
-                    location = Vector3(c[0], c[1],c[2])
+                    cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 255), 3)
+                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
                     self.color = Vector3(0, 255, 255)
 
                 if mean_blue[0] > 50:
                     #print mean
-                    cv2.rectangle(img_out, (c[0]-c[2], c[1]+c[2]), (c[0]+c[2],c[1]-c[2]) , (255,0,0), 2)
+                    cv2.rectangle(img_out, (c[0] - c[2], c[1] + c[2]), (c[0] + c[2], c[1] - c[2]), (255, 0, 0), 2)
                     # draw the outer circle
-                    cv2.circle(img_out,(c[0],c[1]),c[2],(255,0,0),5)
+                    cv2.circle(img_out, (c[0], c[1]), c[2], (255, 0, 0), 5)
                     # draw the center of the circle
-                    cv2.circle(img_out,(c[0],c[1]),2,(255,0,0),3)
-                    location = Vector3(c[0], c[1],c[2])
+                    cv2.circle(img_out, (c[0], c[1]), 2, (255, 0, 0), 3)
+                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
-                    self.color = Vector3(255,0,0)
+                    self.color = Vector3(255, 0, 0)
 
                 if mean_red[0] > 100:
                     #print mean
-                    cv2.rectangle(img_out, (c[0]-c[2], c[1]+c[2]), (c[0]+c[2],c[1]-c[2]) , (0,0,255), 2)
+                    cv2.rectangle(img_out, (c[0] - c[2], c[1] + c[2]), (c[0] + c[2], c[1] - c[2]), (0, 0, 255), 2)
                     # draw the outer circle
-                    cv2.circle(img_out,(c[0],c[1]),c[2],(0,0,255),5)
+                    cv2.circle(img_out, (c[0], c[1]), c[2], (0, 0, 255), 5)
                     # draw the center of the circle
-                    cv2.circle(img_out,(c[0],c[1]),2,(0,0,255),3)
-                    location = Vector3(c[0], c[1],c[2])
+                    cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
+                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
                     self.ball_location = location
                     self.color = Vector3(0, 0, 255)
 
                 if mean_green[0] > 50:
                     #print mean
-                    cv2.rectangle(img_out, (c[0]-c[2], c[1]+c[2]), (c[0]+c[2],c[1]-c[2]) , (0,255,0), 2)
+                    cv2.rectangle(img_out, (c[0] - c[2], c[1] + c[2]), (c[0] + c[2], c[1] - c[2]), (0, 255, 0), 2)
                     # draw the outer circle
-                    cv2.circle(img_out,(c[0],c[1]),c[2],(0,255,0),5)
+                    cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 0), 5)
                     # draw the center of the circle
-                    cv2.circle(img_out,(c[0],c[1]),2,(0,255,0),3)
-                    location = Vector3(c[0], c[1],c[2])
+                    cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 0), 3)
+                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location 
+                    self.ball_location = location
                     self.color = Vector3(0, 255, 0)
 
 
