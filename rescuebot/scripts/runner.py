@@ -225,7 +225,6 @@ class ImageConverter:
         upper_green = np.array([130, 255, 255])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
-        location = None
         if circles is not None:
             for c in circles[0, :]:
                 ROI_red = mask_red[c[1] - c[2]:c[1] + c[2], c[0] - c[2]:c[0] + c[2]]
@@ -251,9 +250,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 255), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 255), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(0, 255, 255)
 
                 if mean_blue[0] > 50:
@@ -263,9 +261,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (255, 0, 0), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (255, 0, 0), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(255, 0, 0)
 
                 if mean_red[0] > 100:
@@ -275,9 +272,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (0, 0, 255), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(0, 0, 255)
 
                 if mean_green[0] > 50:
@@ -287,9 +283,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), c[2], (0, 255, 0), 5)
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 0), 3)
-                    location = Vector3(c[0], c[1], c[2])
                     #print (c[0],c[1],c[2])
-                    self.ball_location = location
+                    self.ball_location = Vector3(c[0], c[1], c[2])
                     self.color = Vector3(0, 255, 0)
 
 
