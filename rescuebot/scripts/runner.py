@@ -136,11 +136,8 @@ class OccupancyGridMapper:
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
-        x_camera = x_odom_index + int(((-self.x_transform + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        x_camera = x_odom_index + int(((-self.y_transform + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         y_camera = y_odom_index + int(((-self.depth + self.odom_pose[1]) - self.origin[1]) * self.resolution)
-
-        print(x_camera)
-        print(y_camera)
 
         # draw the circle
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
@@ -154,9 +151,9 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
-        depth_proportion = -.025
+        depth_proportion = -0.025
         depth_intercept = 1.35
-        self.depth = int(r * depth_proportion + depth_intercept)
+        self.depth = (r * depth_proportion + depth_intercept)
         #print depth
         self.y_transform = int(self.frame_height / 2 - y)
         self.x_transform = int(x - self.frame_width / 2)
@@ -206,23 +203,23 @@ class ImageConverter:
     def find_circles(self, img_src, img_out):
         """Finds and plots circles using Hough Circle detection."""
         circles = cv2.HoughCircles(img_src, cv2.cv.CV_HOUGH_GRADIENT, 1, img_src.shape[0] / 8, param1=10, param2=30,
-                                   minRadius=40, maxRadius=75)
+                                   minRadius=40, maxRadius=100)
         hsv_img = cv2.cvtColor(img_out, cv2.COLOR_BGR2HSV)
 
-        lower_red = np.array([150, 55, 55])
-        upper_red = np.array([200, 255, 255])
+        lower_red = np.array([0, 200, 0])
+        upper_red = np.array([20, 255, 255])
         mask_red = cv2.inRange(hsv_img, lower_red, upper_red)
 
-        lower_blue = np.array([100, 55, 55])
-        upper_blue = np.array([150, 255, 255])
+        lower_blue = np.array([50, 200, 0])
+        upper_blue = np.array([100, 255, 255])
         mask_blue = cv2.inRange(hsv_img, lower_blue, upper_blue)
 
-        lower_yellow = np.array([25, 25, 25])
+        lower_yellow = np.array([20, 25, 25])
         upper_yellow = np.array([30, 255, 255])
         mask_yellow = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
 
-        lower_green = np.array([90, 55, 55])
-        upper_green = np.array([130, 255, 255])
+        lower_green = np.array([60, 200, 10])
+        upper_green = np.array([90, 255, 255])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
         location = None
