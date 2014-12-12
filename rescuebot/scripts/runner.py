@@ -36,17 +36,39 @@ class OccupancyGridMapper:
         #Subscribers and Publishers
         rospy.Subscriber("scan", LaserScan, self.process_scan, queue_size=1)
         self.pub = rospy.Publisher("map", OccupancyGrid)
-        self.move_sub = rospy.Subscriber('ball_coords', Vector3, self.coordinate_to_map)
-        self.color_sub = rospy.Subscriber('color', Vector3, self.process_color, queue_size=1)
+        self.camera_sub = rospy.Subscriber('ball_coords', Vector3, self.process_color_and_coordinate)
         
         #Camera translations
+        #TODO Add stuff for each color, so can map more than one at a time
         self.frame_height = 480
         self.frame_width = 640
-        self.depth = 0
-        self.y_transform = 0
-        self.x_transform = 0
-        self.angle_diff = 0
-        self.color = (0, 0, 0)
+        self.depth_proportion = -0.025
+        self.depth_intercept = 1.35
+
+        self.red = (0, 0, 0)
+        self.yellow = (0, 0, 0)
+        self.blue = (0, 0, 0)
+        self.green = (0, 0, 0)
+
+        self.depth_yellow = 0
+        self.y_transform_yellow = 0 
+        self.x_transform_yellow = 0
+        self.angle_diff_yellow = 0
+
+        self.depth_red = 0
+        self.y_transform_red = 0 
+        self.x_transform_red = 0
+        self.angle_diff_red = 0
+
+        self.depth_green = 0
+        self.y_transform_green = 0 
+        self.x_transform_green = 0
+        self.angle_diff_green = 0
+
+        self.depth_blue = 0
+        self.y_transform_blue = 0 
+        self.x_transform_blue = 0
+        self.angle_diff_blue = 0
 
     def is_in_map(self, x_ind, y_ind):
         """ Return whether or not the given point is within the map boundaries """
@@ -55,9 +77,22 @@ class OccupancyGridMapper:
                     y_ind < self.origin[1] or
                     y_ind > self.origin[1] + self.n * self.resolution)
 
-    def process_color(self, msg):
+    def process_color_and_coordinate(self, msg):
         """ Parse the Twist message into usable tupple, takes in data from color Subscriber"""
-        self.color = (int(msg.x), int(msg.y), int(msg.z))
+        for color, coord in msg:
+            tuple_color = (int(color.x), int(color.y), int(color.z))
+            if tuple_color == (0, 0, 255):
+                self.red = tuple_color
+                self.coordinate_to_map_red(msg[color])
+            else if tuple_color == (255, 0, 0)
+                self.blue = tuple_color
+                self.coordinate_to_map_blue(msg[color])
+            else if tuple_color == (0, 255, 0)
+                self.green = tuple_color
+                self.coordinate_to_map_green(msg[color])
+            else if tuple_color == (0, 255, 255):
+                self.yellow = tuple_color
+                self.coordinate_to_map_yellow(msg[color])
 
     def process_scan(self, msg):
         """ Callback function for the laser scan messages """
@@ -143,28 +178,72 @@ class OccupancyGridMapper:
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
         # computer the ball locations so we can mark with a colored circle
-        x_camera = x_odom_index + int(((-self.y_transform + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-        y_camera = y_odom_index + int(((-self.depth + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+        #TODO Add stuff for each color so can do more than one at a time
+        x_camera_red = x_odom_index + int(((-self.y_transform_red + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        y_camera_red = y_odom_index + int(((-self.depth_red + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+
+        x_camera_blue = x_odom_index + int(((-self.y_transform_blue + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        y_camera_blue = y_odom_index + int(((-self.depth_blue + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+
+        x_camera_green = x_odom_index + int(((-self.y_transform_green + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        y_camera_green = y_odom_index + int(((-self.depth_green + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+
+        x_camera_yellow = x_odom_index + int(((-self.y_transform_yellow + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        y_camera_yellow = y_odom_index + int(((-self.depth_yellow + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
         # draw the circle
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
-        cv2.circle(im, (y_camera, x_camera), 2, self.color)
+        cv2.circle(im, (y_camera_red, x_camera_red), 2, self.red)
+        cv2.circle(im, (y_camera_yellow, x_camera_yellow), 2, self.yellow)
+        cv2.circle(im, (y_camera_green, x_camera_green), 2, self.green)
+        cv2.circle(im, (y_camera_blue, x_camera_blue), 2, self.blue)
         # display the image resized
         cv2.imshow("map", cv2.resize(im, (500, 500)))
         cv2.waitKey(20)
 
-    def coordinate_to_map(self, msg):
+    def coordinate_to_map_red(self, msg):
         x = msg.x
         y = msg.y
         r = msg.z
 
-        depth_proportion = -0.025
-        depth_intercept = 1.35
-        self.depth = (r * depth_proportion + depth_intercept)
+        self.depth_red = (r * self.depth_proportion + self.depth_intercept)
         #print depth
-        self.y_transform = int(self.frame_height / 2 - y)
-        self.x_transform = int(x - self.frame_width / 2)
-        self.angle_diff = self.x_transform
+        self.y_transform_red = int(self.frame_height / 2 - y)
+        self.x_transform_red = int(x - self.frame_width / 2)
+        self.angle_diff_red = self.x_transform_red
+
+    def coordinate_to_map_green(self, msg):
+        x = msg.x
+        y = msg.y
+        r = msg.z
+
+        self.depth_green = (r * self.depth_proportion + self.depth_intercept)
+        #print depth
+        self.y_transform_green = int(self.frame_height / 2 - y)
+        self.x_transform_green = int(x - self.frame_width / 2)
+        self.angle_diff_green = self.x_transform_green
+
+    def coordinate_to_map_blue(self, msg):
+        x = msg.x
+        y = msg.y
+        r = msg.z
+
+        self.depth_blue = (r * self.depth_proportion + self.depth_intercept)
+        #print depth
+        self.y_transform_blue = int(self.frame_height / 2 - y)
+        self.x_transform_blue = int(x - self.frame_width / 2)
+        self.angle_diff_blue = self.x_transform_blue
+
+    def coordinate_to_map_yellow(self, msg):
+        x = msg.x
+        y = msg.y
+        r = msg.z
+
+        self.depth_yellow = (r * self.depth_proportion + self.depth_intercept)
+        #print depth
+        self.y_transform_yellow = int(self.frame_height / 2 - y)
+        self.x_transform_yellow = int(x - self.frame_width / 2)
+        self.angle_diff_yellow = self.x_transform_yellow
 
     @staticmethod
     def convert_pose_to_xy_and_theta(pose):
@@ -176,15 +255,17 @@ class OccupancyGridMapper:
 
 class ImageConverter:
     def __init__(self):
+        #TODO Adjust publishers/subscribers so that can publish more than one color at a time
         print("I'm initialized!")
         self.image_pub = rospy.Publisher("/processed_image", Image)
-        self.ball_pub = rospy.Publisher("/ball_coords", Vector3)
-        self.color_pub = rospy.Publisher("/color", Vector3)
-
+        self.ball_pub= rospy.Publisher("/ball_coords", Vector3)
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.callback)
-        self.ball_location = None
-        self.color = None
+        self.ball_location = {}
+        self.red = Vector3(0, 0, 255)
+        self.green = Vector3(0, 255, 0)
+        self.yellow = Vector3(0, 255, 255)
+        self.blue = Vector3(255, 0, 0)
 
     def callback(self, data):
         try:
@@ -200,10 +281,10 @@ class ImageConverter:
 
         try:
             self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
-            if self.ball_location:
+            if len(self.ball_location) != 0:
                 self.ball_pub.publish(self.ball_location)
-            if self.color:
                 self.color_pub.publish(self.color)
+            
         except CvBridgeError as e:
             print(e)
 
@@ -255,8 +336,7 @@ class ImageConverter:
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 255), 3)
                     #print (c[0],c[1],c[2])
-                    self.ball_location = Vector3(c[0], c[1], c[2])
-                    self.color = Vector3(0, 255, 255)
+                    self.ball_location[self.yellow] = Vector3(c[0], c[1], c[2])
 
                 if mean_blue[0] > 50:
                     #print mean
@@ -266,8 +346,7 @@ class ImageConverter:
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (255, 0, 0), 3)
                     #print (c[0],c[1],c[2])
-                    self.ball_location = Vector3(c[0], c[1], c[2])
-                    self.color = Vector3(255, 0, 0)
+                    self.ball_location[self.blue] = Vector3(c[0], c[1], c[2])
 
                 if mean_red[0] > 100:
                     #print mean
@@ -277,8 +356,7 @@ class ImageConverter:
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
                     #print (c[0],c[1],c[2])
-                    self.ball_location = Vector3(c[0], c[1], c[2])
-                    self.color = Vector3(0, 0, 255)
+                    self.ball_location[self.red] = Vector3(c[0], c[1], c[2])
 
                 if mean_green[0] > 50:
                     #print mean
@@ -288,8 +366,7 @@ class ImageConverter:
                     # draw the center of the circle
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 0), 3)
                     #print (c[0],c[1],c[2])
-                    self.ball_location = Vector3(c[0], c[1], c[2])
-                    self.color = Vector3(0, 255, 0)
+                    self.ball_location[self.green] = Vector3(c[0], c[1], c[2])
 
 
 class Controller:
