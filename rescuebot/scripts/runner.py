@@ -21,7 +21,8 @@ class OccupancyGridMapper:
 
     def __init__(self):
         cv2.namedWindow("map")
-        #rospy.init_node("occupancy_grid_mapper")
+
+        #Establish mapping conventions
         self.origin = [-10, -10]
         self.seq = 0
         self.resolution = .1
@@ -30,15 +31,18 @@ class OccupancyGridMapper:
         self.odds_ratio_hit = 3.0
         self.odds_ratio_miss = .2
         self.odds_ratios = self.p_occ / (1 - self.p_occ) * np.ones((self.n, self.n))
+        self.tf_listener = TransformListener()
+
+        #Subscribers and Publishers
         rospy.Subscriber("scan", LaserScan, self.process_scan, queue_size=1)
         self.pub = rospy.Publisher("map", OccupancyGrid)
-        self.tf_listener = TransformListener()
         self.move_sub = rospy.Subscriber('ball_coords', Vector3, self.coordinate_to_map)
         self.color_sub = rospy.Subscriber('color', Vector3, self.process_color, queue_size=1)
+        
+        #Camera translations
         self.frame_height = 480
         self.frame_width = 640
         self.depth = 0
-        #print depth
         self.y_transform = 0
         self.x_transform = 0
         self.angle_diff = 0
@@ -52,26 +56,28 @@ class OccupancyGridMapper:
                     y_ind > self.origin[1] + self.n * self.resolution)
 
     def process_color(self, msg):
+        """ Parse the Twist message into usable tupple, takes in data from color Subscriber"""
         self.color = (int(msg.x), int(msg.y), int(msg.z))
 
     def process_scan(self, msg):
         """ Callback function for the laser scan messages """
-        if len(msg.ranges) != 360:
-            # throw out scans that don't have all the laser data
+        if len(msg.ranges) <= 330:
+            # throw out scans that don't have more than 90% of the data
             return
         # get pose according to the odometry
         p = PoseStamped(header=Header(stamp=msg.header.stamp, frame_id="base_link"), pose=Pose())
         self.odom_pose = self.tf_listener.transformPose("odom", p)
         # convert the odom pose to the tuple (x,y,theta)
         self.odom_pose = OccupancyGridMapper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
-        for i in range(360):
-            if 0.0 < msg.ranges[i] < 5.0:
+        for i in range(len(msg.ranges)):
+            if 0.0 < msg.ranges[i] < 5.0: #for any reding within 5 meters
+                #Using the pose and the measurement nd the angle, find it in the world
                 map_x = self.odom_pose[0] + msg.ranges[i] * cos(i * pi / 180.0 + self.odom_pose[2])
                 map_y = self.odom_pose[1] + msg.ranges[i] * sin(i * pi / 180.0 + self.odom_pose[2])
-
+                #Relate that map measure with a place in the picture
                 x_detect = int((map_x - self.origin[0]) / self.resolution)
                 y_detect = int((map_y - self.origin[1]) / self.resolution)
-
+                #Determine how to mark the location in the map, along with the stuff inbetween
                 u = (map_x - self.odom_pose[0], map_y - self.odom_pose[1])
                 magnitude = sqrt(u[0] ** 2 + u[1] ** 2)
                 n_steps = max([1, int(ceil(magnitude / self.resolution))])
@@ -136,6 +142,7 @@ class OccupancyGridMapper:
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
+        # computer the ball locations so we can mark with a colored circle
         x_camera = x_odom_index + int(((-self.y_transform + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         y_camera = y_odom_index + int(((-self.depth + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
