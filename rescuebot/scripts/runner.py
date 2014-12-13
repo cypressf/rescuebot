@@ -4,6 +4,7 @@ from std_msgs.msg import Header
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import Image, LaserScan
 from cv_bridge import CvBridge, CvBridgeError
+from points import LaserPoint, ranges_to_points
 import rospy
 import cv_bridge
 import sys
@@ -15,6 +16,13 @@ from matplotlib.pyplot import imshow
 import cv2
 import numpy as np
 
+
+MAX_LINEAR_SPEED = 0.14
+MAX_ANGULAR_SPEED = .28
+DANGER_ZONE_LENGTH = 1.0
+DANGER_ZONE_WIDTH = 0.5
+DANGER_POINTS_MULTIPLIER = 1/50.0
+WALL_FOLLOW_DISTANCE = .5
 
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
@@ -305,11 +313,14 @@ class Controller:
         self.trailing_left_avg = 0
         self.trailing_right_avg = 0
 
-        self.lin_speed = 0.01
-        self.spin_speed = 0.01
+        self.get_cmd_vel = self.follow_wall
+
+        self.points = []
 
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
+
+        self.points = ranges_to_points(laser_scan_message.ranges)
 
         # Process some of the data
         lead_left_distance = []
@@ -336,14 +347,18 @@ class Controller:
             self.side = 'right'
 
     def follow_wall(self):
-        linear_velocity = self.lin_speed
+        if self.get_danger_points():
+            self.get_cmd_vel = self.obstacle_avoid
+            return self.obstacle_avoid()
+
+        linear_velocity = MAX_LINEAR_SPEED
 
         if self.side == 'right':
             right_prop_dist = (self.lead_right_avg - self.trailing_right_avg)
-            if self.lead_right_avg < 1.0 - 0.1 and self.lead_right_avg != 0:
+            if self.lead_right_avg < WALL_FOLLOW_DISTANCE - 0.1 and self.lead_right_avg != 0:
                 angular_velocity = self.lead_right_avg
                 # print("move towards")
-            elif self.lead_right_avg > 1.0 + 0.1:
+            elif self.lead_right_avg > WALL_FOLLOW_DISTANCE + 0.1:
                 angular_velocity = -self.lead_right_avg
                 # print("move away")
             else:
@@ -357,9 +372,9 @@ class Controller:
         elif self.side == 'left':
             # print("Left!")
             left_prop_dist = (self.lead_left_avg - self.trailing_left_avg)
-            if self.lead_left_avg < 1.0 - 0.1 and self.lead_left_avg != 0:
+            if self.lead_left_avg < WALL_FOLLOW_DISTANCE - 0.1 and self.lead_left_avg != 0:
                 angular_velocity = -self.lead_left_avg
-            elif self.lead_left_avg > 1.0 + 0.1:
+            elif self.lead_left_avg > WALL_FOLLOW_DISTANCE + 0.1:
                 angular_velocity = self.lead_left_avg
             else:
                 if self.lead_left_avg - 0.1 < self.trailing_left_avg < 0.1 + self.lead_left_avg:
@@ -370,16 +385,48 @@ class Controller:
             linear_velocity = 0.0
             angular_velocity = 0.0
 
-        # return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
-        return Twist(Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
+        return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
+        # return Twist(Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
+
+    def is_in_danger_zone(self, point):
+        a = DANGER_ZONE_LENGTH * sin(point.angle_radians)
+        b = DANGER_ZONE_WIDTH * cos(point.angle_radians)
+        max_radius = (DANGER_ZONE_LENGTH * DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
+        return point.length < max_radius and point.is_in_front()
+
+    def get_danger_points(self):
+        return [point for point in self.points if self.is_in_danger_zone(point)]
+
+    def obstacle_avoid(self):
+        danger_points = self.get_danger_points()
+        left_danger_points = [point for point in danger_points if point.is_in_front_left()]
+        right_danger_points = [point for point in danger_points if point.is_in_front_right()]
+
+        if not danger_points:
+            self.get_cmd_vel = self.follow_wall
+            return self.follow_wall()
+
+        if len(left_danger_points) < len(right_danger_points):
+            return self.turn_left(len(right_danger_points))
+        else:
+            return self.turn_right(len(left_danger_points))
+
+    def turn_left(self, num_danger_points):
+        angular_velocity = Vector3(z=num_danger_points * DANGER_POINTS_MULTIPLIER * MAX_ANGULAR_SPEED)
+        linear_velocity = Vector3(x=MAX_LINEAR_SPEED * (1 - num_danger_points * DANGER_POINTS_MULTIPLIER))
+        return Twist(angular=angular_velocity, linear=linear_velocity)
+
+    def turn_right(self, num_danger_points):
+        angular_velocity = Vector3(z=num_danger_points * DANGER_POINTS_MULTIPLIER * -MAX_ANGULAR_SPEED)
+        linear_velocity = Vector3(x=MAX_LINEAR_SPEED * (1 - num_danger_points * DANGER_POINTS_MULTIPLIER))
+        return Twist(angular=angular_velocity, linear=linear_velocity)
 
     def run(self):
         """Subscribe to the laser scan data and images."""
         self.running = True
         rate = rospy.Rate(20)
         while not rospy.is_shutdown() and self.running:
-            self.cmd_vel = self.follow_wall()
-            self.pub.publish(self.cmd_vel)
+            self.pub.publish(self.get_cmd_vel())
             rate.sleep()
 
     def stop_neato(self, signal, frame):
@@ -393,7 +440,7 @@ def main(args):
     rospy.init_node('image_converter', anonymous=True)
     ic = ImageConverter()
     rescuebot = Controller()
-    star_center = OccupancyGridMapper()
+    # star_center = OccupancyGridMapper()
     try:
         rescuebot.run()
         rospy.spin()
