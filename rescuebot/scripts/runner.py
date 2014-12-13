@@ -190,16 +190,16 @@ class OccupancyGridMapper:
 
         # computer the ball locations so we can mark with a colored circle
         #TODO Add stuff for each color so can do more than one at a time
-        self.x_camera_red = x_odom_index + int(((-self.y_transform_red + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        self.x_camera_red = x_odom_index + int(((-self.x_transform_red + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         self.y_camera_red = y_odom_index + int(((-self.depth_red + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
-        self.x_camera_blue = x_odom_index + int(((-self.y_transform_blue + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        self.x_camera_blue = x_odom_index + int(((-self.x_transform_blue + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         self.y_camera_blue = y_odom_index + int(((-self.depth_blue + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
-        self.x_camera_green = x_odom_index + int(((-self.y_transform_green + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        self.x_camera_green = x_odom_index + int(((-self.x_transform_green + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         self.y_camera_green = y_odom_index + int(((-self.depth_green + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
-        self.x_camera_yellow = x_odom_index + int(((-self.y_transform_yellow + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+        self.x_camera_yellow = x_odom_index + int(((-self.x_transform_yellow + self.odom_pose[0]) - self.origin[0]) * self.resolution)
         self.y_camera_yellow = y_odom_index + int(((-self.depth_yellow + self.odom_pose[1]) - self.origin[1]) * self.resolution)
 
         print self.x_camera_green
@@ -235,6 +235,9 @@ class OccupancyGridMapper:
 
         self.depth_green = (r * self.depth_proportion + self.depth_intercept)
         print self.depth_green
+        print x
+        print y
+        print r
         self.y_transform_green = int(self.frame_height / 2 - y)
         self.x_transform_green = int(x - self.frame_width / 2)
         self.angle_diff_green = self.x_transform_green
