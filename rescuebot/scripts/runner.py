@@ -190,28 +190,29 @@ class OccupancyGridMapper:
 
         # computer the ball locations so we can mark with a colored circle
         #TODO Add stuff for each color so can do more than one at a time
-        self.x_camera_red = x_odom_index + int(((-self.x_transform_red + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-        self.y_camera_red = y_odom_index + int(((-self.depth_red + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+        if self.depth_red != 0:
+            self.x_camera_red = x_odom_index + int(((-self.y_transform_red + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+            self.y_camera_red = y_odom_index + int(((-self.depth_red + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.y_camera_red, self.x_camera_red), 2, self.red)
 
-        self.x_camera_blue = x_odom_index + int(((-self.x_transform_blue + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-        self.y_camera_blue = y_odom_index + int(((-self.depth_blue + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+        if self.depth_blue != 0:
+            self.x_camera_blue = x_odom_index + int(((-self.y_transform_blue + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+            self.y_camera_blue = y_odom_index + int(((-self.depth_blue + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.y_camera_blue, self.x_camera_blue), 2, self.blue)
 
-        self.x_camera_green = x_odom_index + int(((-self.x_transform_green + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-        self.y_camera_green = y_odom_index + int(((-self.depth_green + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+        if self.depth_green != 0:
+            self.x_camera_green = x_odom_index + int(((-self.y_transform_green + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+            self.y_camera_green = y_odom_index + int(((-self.depth_green + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.y_camera_green, self.x_camera_green), 2, self.green)
 
-        self.x_camera_yellow = x_odom_index + int(((-self.x_transform_yellow + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-        self.y_camera_yellow = y_odom_index + int(((-self.depth_yellow + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+        if self.depth_yellow != 0:
+            self.x_camera_yellow = x_odom_index + int(((-self.y_transform_yellow + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+            self.y_camera_yellow = y_odom_index + int(((-self.depth_yellow + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.y_camera_yellow, self.x_camera_yellow), 2, self.yellow)
 
-        print self.x_camera_green
-        print self.y_camera_green
-        print self.y_transform_green
-
-        # draw the circle
+        # draw the robot
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
-        # cv2.circle(im, (self.y_camera_red, self.x_camera_red), 2, self.red)
-        # cv2.circle(im, (self.y_camera_yellow, self.x_camera_yellow), 2, self.yellow)
-        cv2.circle(im, (self.y_camera_green, self.x_camera_green), 2, self.green)
-        # cv2.circle(im, (self.y_camera_blue, self.x_camera_blue), 2, self.blue)
+        
         # display the image resized
         cv2.imshow("map", cv2.resize(im, (500, 500)))
         cv2.waitKey(20)
