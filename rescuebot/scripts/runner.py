@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import division
 from geometry_msgs.msg import Twist, Vector3, PoseStamped, Pose
 from std_msgs.msg import Header
 from nav_msgs.msg import OccupancyGrid
@@ -23,6 +24,7 @@ DANGER_ZONE_LENGTH = 1.0
 DANGER_ZONE_WIDTH = 0.5
 DANGER_POINTS_MULTIPLIER = 1/50.0
 WALL_FOLLOW_DISTANCE = .5
+ROOM_CENTER_CUTOFF = 0.7
 
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
@@ -313,7 +315,7 @@ class Controller:
         self.trailing_left_avg = 0
         self.trailing_right_avg = 0
 
-        self.get_cmd_vel = self.follow_wall
+        self.get_cmd_vel = self.room_center
 
         self.points = []
 
@@ -396,6 +398,43 @@ class Controller:
 
     def get_danger_points(self):
         return [point for point in self.points if self.is_in_danger_zone(point)]
+
+    def room_center(self):
+        """
+        Go to the center of the room.
+        """
+        angle_scaling = 0.7
+        angle_cutoff = 1/20 * 2 * pi
+        std_dev = np.std([point.length for point in self.points])
+        # rospy.loginfo(std_dev)
+        if std_dev < ROOM_CENTER_CUTOFF:
+            self.get_cmd_vel = self.follow_wall
+            return self.follow_wall()
+        else:
+            closest_points = sorted(self.points)[:10]
+            angles = [point.angle_radians for point in closest_points]
+            imaginary_numbers = [np.exp(angle*1j) for angle in angles]
+            angle_mean = np.angle(np.mean(imaginary_numbers))
+            if angle_mean < 0:
+                angle_mean += 2*pi
+
+            angle = angle_mean / (2 * pi)
+            if angle < 1/2:
+                linear_velocity = np.interp(angle, [0, 1/2], [-MAX_LINEAR_SPEED, MAX_LINEAR_SPEED])
+            else:
+                linear_velocity = np.interp(angle, [1/2, 1], [MAX_LINEAR_SPEED, -MAX_LINEAR_SPEED])
+
+            if 1/4 < angle < 3/4:
+                angular_velocity = np.interp(angle, [1/4, 3/4], [-MAX_ANGULAR_SPEED, MAX_ANGULAR_SPEED])
+            elif 0 <= angle <= 1/4:
+                angular_velocity = np.interp(angle, [0, 1/4], [0, MAX_ANGULAR_SPEED])
+            else:
+                angular_velocity = np.interp(angle, [3/4, 1], [-MAX_ANGULAR_SPEED, 0])
+
+            cmd_vel = Twist()
+            cmd_vel.angular.z = angular_velocity
+            cmd_vel.linear.x = linear_velocity
+            return cmd_vel
 
     def obstacle_avoid(self):
         danger_points = self.get_danger_points()
