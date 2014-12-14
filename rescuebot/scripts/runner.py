@@ -29,6 +29,7 @@ class OccupancyGridMapper:
 
     def __init__(self):
         cv2.namedWindow("map")
+        print 'Running'
 
         #Establish mapping conventions
         self.origin = [-10, -10]
@@ -197,10 +198,10 @@ class OccupancyGridMapper:
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
         # computer the ball locations so we can mark with a colored circle
-        #TODO Add stuff for each color so can do more than one at a time
+        #TODO Track and relate the robot's angle pose for accuracy
         if self.depth_red != 0:
-            self.x_camera_red = x_odom_index + int(((-self.y_transform_red + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-            self.y_camera_red = y_odom_index + int(((-self.depth_red + self.odom_pose[1]) - self.origin[1]) * self.resolution)
+            self.x_camera_red = x_odom_index + int(((-self.y_transform_red * cos(self.odom_pose[2]) + self.odom_pose[0]) - self.origin[0]) * self.resolution)
+            self.y_camera_red = y_odom_index + int(((-self.depth_red * sin( self.odom_pose[2])+ self.odom_pose[1]) - self.origin[1]) * self.resolution)
             cv2.circle(im, (self.y_camera_red, self.x_camera_red), 2, self.red)
 
         if self.depth_blue != 0:
@@ -548,7 +549,7 @@ def main(args):
     rospy.init_node('image_converter', anonymous=True)
     ic = ImageConverter()
     rescuebot = Controller()
-    # star_center = OccupancyGridMapper()
+    star_center = OccupancyGridMapper()
     try:
         rescuebot.run()
         rospy.spin()
