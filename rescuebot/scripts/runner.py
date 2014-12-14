@@ -24,7 +24,7 @@ DANGER_ZONE_LENGTH = 1.0
 DANGER_ZONE_WIDTH = 0.5
 DANGER_POINTS_MULTIPLIER = 1/50.0
 WALL_FOLLOW_DISTANCE = .5
-ROOM_CENTER_CUTOFF = 0.7
+ROOM_CENTER_CUTOFF = 0.5
 
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
@@ -403,38 +403,53 @@ class Controller:
         """
         Go to the center of the room.
         """
-        angle_scaling = 0.7
-        angle_cutoff = 1/20 * 2 * pi
         std_dev = np.std([point.length for point in self.points])
         # rospy.loginfo(std_dev)
         if std_dev < ROOM_CENTER_CUTOFF:
+            self.get_cmd_vel = self.start_360()
+            return self.start_360()
+        closest_points = sorted(self.points)[:60]
+        angles = [point.angle_radians for point in closest_points]
+        imaginary_numbers = [np.exp(angle*1j) for angle in angles]
+        angle_mean = np.angle(np.mean(imaginary_numbers))
+        if angle_mean < 0:
+            angle_mean += 2*pi
+
+        angle = angle_mean / (2 * pi)
+        if angle < 1/2:
+            linear_velocity = np.interp(angle, [0, 1/2], [-MAX_LINEAR_SPEED, MAX_LINEAR_SPEED])
+        else:
+            linear_velocity = np.interp(angle, [1/2, 1], [MAX_LINEAR_SPEED, -MAX_LINEAR_SPEED])
+
+        if 1/4 < angle < 3/4:
+            angular_velocity = np.interp(angle, [1/4, 3/4], [-MAX_ANGULAR_SPEED, MAX_ANGULAR_SPEED])
+        elif 0 <= angle <= 1/4:
+            angular_velocity = np.interp(angle, [0, 1/4], [0, MAX_ANGULAR_SPEED])
+        else:
+            angular_velocity = np.interp(angle, [3/4, 1], [-MAX_ANGULAR_SPEED, 0])
+
+        cmd_vel = Twist()
+        cmd_vel.angular.z = angular_velocity
+        cmd_vel.linear.x = linear_velocity
+        rospy.loginfo("wall angle: {:.4f} -> linear: {:.4f}, angular: {:.4f}. std_dev: {:.3f}".format(angle, linear_velocity, angular_velocity, std_dev))
+        return cmd_vel
+
+    def start_360(self):
+        self.time = 0
+        self.get_cmd_vel = self.do_360
+        return self.do_360()
+
+    def do_360(self):
+        """
+        Turn around a full 360 degrees, then wall follow.
+        """
+        self.time+=1
+        if self.time > 130 / MAX_ANGULAR_SPEED:
             self.get_cmd_vel = self.follow_wall
             return self.follow_wall()
-        else:
-            closest_points = sorted(self.points)[:10]
-            angles = [point.angle_radians for point in closest_points]
-            imaginary_numbers = [np.exp(angle*1j) for angle in angles]
-            angle_mean = np.angle(np.mean(imaginary_numbers))
-            if angle_mean < 0:
-                angle_mean += 2*pi
-
-            angle = angle_mean / (2 * pi)
-            if angle < 1/2:
-                linear_velocity = np.interp(angle, [0, 1/2], [-MAX_LINEAR_SPEED, MAX_LINEAR_SPEED])
-            else:
-                linear_velocity = np.interp(angle, [1/2, 1], [MAX_LINEAR_SPEED, -MAX_LINEAR_SPEED])
-
-            if 1/4 < angle < 3/4:
-                angular_velocity = np.interp(angle, [1/4, 3/4], [-MAX_ANGULAR_SPEED, MAX_ANGULAR_SPEED])
-            elif 0 <= angle <= 1/4:
-                angular_velocity = np.interp(angle, [0, 1/4], [0, MAX_ANGULAR_SPEED])
-            else:
-                angular_velocity = np.interp(angle, [3/4, 1], [-MAX_ANGULAR_SPEED, 0])
-
-            cmd_vel = Twist()
-            cmd_vel.angular.z = angular_velocity
-            cmd_vel.linear.x = linear_velocity
-            return cmd_vel
+        t = Twist()
+        t.angular.z = MAX_ANGULAR_SPEED
+        return t
 
     def obstacle_avoid(self):
         danger_points = self.get_danger_points()
