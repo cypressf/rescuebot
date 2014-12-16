@@ -16,6 +16,7 @@ from math import cos, sin, pi, sqrt, ceil
 from matplotlib.pyplot import imshow
 import cv2
 import numpy as np
+import dynamic_reconfigure.client
 
 
 MAX_LINEAR_SPEED = 0.14
@@ -25,6 +26,11 @@ DANGER_ZONE_WIDTH = 0.5
 DANGER_POINTS_MULTIPLIER = 1/50.0
 WALL_FOLLOW_DISTANCE = .5
 ROOM_CENTER_CUTOFF = 0.5
+
+
+def dynamic_reconfigure_callback(config):
+    rospy.loginfo("Config set to {max_linear_speed}".format(**config))
+
 
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
@@ -492,6 +498,7 @@ class Controller:
 
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
+    dynamic_reconfigure_client = dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=30, config_callback=dynamic_reconfigure_callback)
     ic = ImageConverter()
     rescuebot = Controller()
     # star_center = OccupancyGridMapper()

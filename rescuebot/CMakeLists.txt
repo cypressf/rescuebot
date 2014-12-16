@@ -8,7 +8,17 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  dynamic_reconfigure
 )
+
+#add dynamic reconfigure api
+generate_dynamic_reconfigure_options(
+  cfg/Controller.cfg
+)
+
+# make sure configure headers are built before any node using them
+#add_dependencies(runner ${PROJECT_NAME}_gencfg)
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
