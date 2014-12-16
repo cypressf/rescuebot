@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 generate_dynamic_reconfigure_options(
   cfg/Controller.cfg
 )
+catkin_package(CATKIN_DEPENDS dynamic_reconfigure)
 
 # make sure configure headers are built before any node using them
 #add_dependencies(runner ${PROJECT_NAME}_gencfg)

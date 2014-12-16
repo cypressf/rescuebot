@@ -19,19 +19,6 @@ import numpy as np
 import dynamic_reconfigure.client
 
 
-MAX_LINEAR_SPEED = 0.14
-MAX_ANGULAR_SPEED = .28
-DANGER_ZONE_LENGTH = 1.0
-DANGER_ZONE_WIDTH = 0.5
-DANGER_POINTS_MULTIPLIER = 1/50.0
-WALL_FOLLOW_DISTANCE = .5
-ROOM_CENTER_CUTOFF = 0.5
-
-
-def dynamic_reconfigure_callback(config):
-    rospy.loginfo("Config set to {max_linear_speed}".format(**config))
-
-
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
 
@@ -315,6 +302,15 @@ class Controller:
         signal.signal(signal.SIGINT, self.stop_neato)
         rospy.Subscriber("scan", LaserScan, self.laser_scan_received, queue_size=1)
 
+        self.MAX_LINEAR_SPEED = 0.14
+        self.MAX_ANGULAR_SPEED = .28
+        self.DANGER_ZONE_LENGTH = 1.0
+        self.DANGER_ZONE_WIDTH = 0.5
+        self.DANGER_POINTS_MULTIPLIER = 1/50.0
+        self.WALL_FOLLOW_DISTANCE = .5
+        self.ROOM_CENTER_CUTOFF = 0.5
+        self.room_center_number_points = 60
+
         self.side = None
         self.lead_left_avg = 0
         self.lead_right_avg = 0
@@ -359,14 +355,14 @@ class Controller:
             self.get_cmd_vel = self.obstacle_avoid
             return self.obstacle_avoid()
 
-        linear_velocity = MAX_LINEAR_SPEED
+        linear_velocity = self.MAX_LINEAR_SPEED
 
         if self.side == 'right':
             right_prop_dist = (self.lead_right_avg - self.trailing_right_avg)
-            if self.lead_right_avg < WALL_FOLLOW_DISTANCE - 0.1 and self.lead_right_avg != 0:
+            if self.lead_right_avg < self.WALL_FOLLOW_DISTANCE - 0.1 and self.lead_right_avg != 0:
                 angular_velocity = self.lead_right_avg
                 # print("move towards")
-            elif self.lead_right_avg > WALL_FOLLOW_DISTANCE + 0.1:
+            elif self.lead_right_avg > self.WALL_FOLLOW_DISTANCE + 0.1:
                 angular_velocity = -self.lead_right_avg
                 # print("move away")
             else:
@@ -380,9 +376,9 @@ class Controller:
         elif self.side == 'left':
             # print("Left!")
             left_prop_dist = (self.lead_left_avg - self.trailing_left_avg)
-            if self.lead_left_avg < WALL_FOLLOW_DISTANCE - 0.1 and self.lead_left_avg != 0:
+            if self.lead_left_avg < self.WALL_FOLLOW_DISTANCE - 0.1 and self.lead_left_avg != 0:
                 angular_velocity = -self.lead_left_avg
-            elif self.lead_left_avg > WALL_FOLLOW_DISTANCE + 0.1:
+            elif self.lead_left_avg > self.WALL_FOLLOW_DISTANCE + 0.1:
                 angular_velocity = self.lead_left_avg
             else:
                 if self.lead_left_avg - 0.1 < self.trailing_left_avg < 0.1 + self.lead_left_avg:
@@ -397,9 +393,9 @@ class Controller:
         # return Twist(Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
 
     def is_in_danger_zone(self, point):
-        a = DANGER_ZONE_LENGTH * sin(point.angle_radians)
-        b = DANGER_ZONE_WIDTH * cos(point.angle_radians)
-        max_radius = (DANGER_ZONE_LENGTH * DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
+        a = self.DANGER_ZONE_LENGTH * sin(point.angle_radians)
+        b = self.DANGER_ZONE_WIDTH * cos(point.angle_radians)
+        max_radius = (self.DANGER_ZONE_LENGTH * self.DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
         return point.length < max_radius and point.is_in_front()
 
     def get_danger_points(self):
@@ -411,10 +407,10 @@ class Controller:
         """
         std_dev = np.std([point.length for point in self.points])
         # rospy.loginfo(std_dev)
-        if std_dev < ROOM_CENTER_CUTOFF:
+        if std_dev < self.ROOM_CENTER_CUTOFF:
             self.get_cmd_vel = self.start_360()
             return self.start_360()
-        closest_points = sorted(self.points)[:60]
+        closest_points = sorted(self.points)[:self.room_center_number_points]
         angles = [point.angle_radians for point in closest_points]
         imaginary_numbers = [np.exp(angle*1j) for angle in angles]
         angle_mean = np.angle(np.mean(imaginary_numbers))
@@ -423,16 +419,16 @@ class Controller:
 
         angle = angle_mean / (2 * pi)
         if angle < 1/2:
-            linear_velocity = np.interp(angle, [0, 1/2], [-MAX_LINEAR_SPEED, MAX_LINEAR_SPEED])
+            linear_velocity = np.interp(angle, [0, 1/2], [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED])
         else:
-            linear_velocity = np.interp(angle, [1/2, 1], [MAX_LINEAR_SPEED, -MAX_LINEAR_SPEED])
+            linear_velocity = np.interp(angle, [1/2, 1], [self.MAX_LINEAR_SPEED, -self.MAX_LINEAR_SPEED])
 
         if 1/4 < angle < 3/4:
-            angular_velocity = np.interp(angle, [1/4, 3/4], [-MAX_ANGULAR_SPEED, MAX_ANGULAR_SPEED])
+            angular_velocity = np.interp(angle, [1/4, 3/4], [-self.MAX_ANGULAR_SPEED, self.MAX_ANGULAR_SPEED])
         elif 0 <= angle <= 1/4:
-            angular_velocity = np.interp(angle, [0, 1/4], [0, MAX_ANGULAR_SPEED])
+            angular_velocity = np.interp(angle, [0, 1/4], [0, self.MAX_ANGULAR_SPEED])
         else:
-            angular_velocity = np.interp(angle, [3/4, 1], [-MAX_ANGULAR_SPEED, 0])
+            angular_velocity = np.interp(angle, [3/4, 1], [-self.MAX_ANGULAR_SPEED, 0])
 
         cmd_vel = Twist()
         cmd_vel.angular.z = angular_velocity
@@ -450,11 +446,11 @@ class Controller:
         Turn around a full 360 degrees, then wall follow.
         """
         self.time+=1
-        if self.time > 130 / MAX_ANGULAR_SPEED:
+        if self.time > 130 / self.MAX_ANGULAR_SPEED:
             self.get_cmd_vel = self.follow_wall
             return self.follow_wall()
         t = Twist()
-        t.angular.z = MAX_ANGULAR_SPEED
+        t.angular.z = self.MAX_ANGULAR_SPEED
         return t
 
     def obstacle_avoid(self):
@@ -472,18 +468,19 @@ class Controller:
             return self.turn_right(len(left_danger_points))
 
     def turn_left(self, num_danger_points):
-        angular_velocity = Vector3(z=num_danger_points * DANGER_POINTS_MULTIPLIER * MAX_ANGULAR_SPEED)
-        linear_velocity = Vector3(x=MAX_LINEAR_SPEED * (1 - num_danger_points * DANGER_POINTS_MULTIPLIER))
+        angular_velocity = Vector3(z=num_danger_points * self.DANGER_POINTS_MULTIPLIER * self.MAX_ANGULAR_SPEED)
+        linear_velocity = Vector3(x=self.MAX_LINEAR_SPEED * (1 - num_danger_points * self.DANGER_POINTS_MULTIPLIER))
         return Twist(angular=angular_velocity, linear=linear_velocity)
 
     def turn_right(self, num_danger_points):
-        angular_velocity = Vector3(z=num_danger_points * DANGER_POINTS_MULTIPLIER * -MAX_ANGULAR_SPEED)
-        linear_velocity = Vector3(x=MAX_LINEAR_SPEED * (1 - num_danger_points * DANGER_POINTS_MULTIPLIER))
+        angular_velocity = Vector3(z=num_danger_points * self.DANGER_POINTS_MULTIPLIER * -self.MAX_ANGULAR_SPEED)
+        linear_velocity = Vector3(x=self.MAX_LINEAR_SPEED * (1 - num_danger_points * self.DANGER_POINTS_MULTIPLIER))
         return Twist(angular=angular_velocity, linear=linear_velocity)
 
     def run(self):
         """Subscribe to the laser scan data and images."""
         self.running = True
+        dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=5, config_callback=self.dynamic_reconfigure_callback)
         rate = rospy.Rate(20)
         while not rospy.is_shutdown() and self.running:
             self.pub.publish(self.get_cmd_vel())
@@ -495,10 +492,19 @@ class Controller:
         self.pub.publish(Twist())
         sys.exit(0)
 
+    def dynamic_reconfigure_callback(self, config):
+        self.MAX_LINEAR_SPEED = config["max_linear_speed"]
+        self.MAX_ANGULAR_SPEED = config["max_angular_speed"]
+        self.DANGER_ZONE_LENGTH = config["danger_zone_length"]
+        self.DANGER_ZONE_WIDTH = config["danger_zone_width"]
+        self.DANGER_POINTS_MULTIPLIER = config["danger_points_multiplier"]
+        self.WALL_FOLLOW_DISTANCE = config["wall_follow_distance"]
+        self.ROOM_CENTER_CUTOFF = config["room_center_cutoff"]
+        self.room_center_number_points = config["room_center_number_points"]
+        rospy.loginfo(config)
 
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
-    dynamic_reconfigure_client = dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=30, config_callback=dynamic_reconfigure_callback)
     ic = ImageConverter()
     rescuebot = Controller()
     # star_center = OccupancyGridMapper()
