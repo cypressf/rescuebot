@@ -18,10 +18,10 @@ class LaserPoint:
         self.angle_radians = radians(angle)
 
     def __lt__(self, other):
-        return self.length < other.radius
+        return self.length < other.length
 
     def __str__(self):
-        return "radius: %.2f  angle: %.3f" % (self.length, self.angle_radians / TAU)
+        return "length: %.2f  angle: %.3f" % (self.length, self.angle_radians / TAU)
 
     def is_in_front(self):
         return self.is_in_front_right() or self.is_in_front_left()
