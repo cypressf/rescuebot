@@ -49,7 +49,7 @@ class OccupancyGridMapper:
         #TODO Add stuff for each color, so can map more than one at a time
         self.frame_height = 480
         self.frame_width = 640
-        self.depth_proportion = -0.8
+        self.depth_proportion = -0.1
         self.depth_intercept = 1.35
 
         self.red = (0, 0, 255)
@@ -117,16 +117,21 @@ class OccupancyGridMapper:
         # get pose according to the odometry
         p = PoseStamped(header=Header(stamp=msg.header.stamp, frame_id="base_link"), pose=Pose())
         self.odom_pose = self.tf_listener.transformPose("odom", p)
+        self.base_pose = self.tf_listener.transformPose("base_laser_link", p)
         # convert the odom pose to the tuple (x,y,theta)
         self.odom_pose = OccupancyGridMapper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
+        self.base_pose = OccupancyGridMapper.convert_pose_to_xy_and_theta(self.base_pose.pose)
         for i in range(len(msg.ranges)):
             if 0.0 < msg.ranges[i] < 5.0: #for any reding within 5 meters
                 #Using the pose and the measurement nd the angle, find it in the world
                 map_x = self.odom_pose[0] + msg.ranges[i] * cos(i * pi / 180.0 + self.odom_pose[2])
-                map_y = self.odom_pose[1] + msg.ranges[i] * sin(i * pi / 180.0 + self.odom_pose[2])
+                map_y = self.odom_pose[1] + msg.ranges[i] * -sin(i * pi / 180.0 + self.odom_pose[2])
+
                 #Relate that map measure with a place in the picture
                 x_detect = int((map_x - self.origin[0]) / self.resolution)
                 y_detect = int((map_y - self.origin[1]) / self.resolution)
+
+
                 #Determine how to mark the location in the map, along with the stuff inbetween
                 u = (map_x - self.odom_pose[0], map_y - self.odom_pose[1])
                 magnitude = sqrt(u[0] ** 2 + u[1] ** 2)
@@ -192,31 +197,33 @@ class OccupancyGridMapper:
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
         y_odom_index = int((self.odom_pose[1] - self.origin[1]) / self.resolution)
 
+        x_base_index = int((self.base_pose[0] - self.origin[0] - 1) / self.resolution)
+        y_base_index = int((self.base_pose[1] - self.origin[1]) / self.resolution)
+
+
         # computer the ball locations so we can mark with a colored circle
         #TODO Track and relate the robot's angle pose for accuracy
+
+        print self.depth_red
         if self.depth_red != 0:
-            self.x_camera_red = x_odom_index + int(((-self.x_transform_red - self.odom_pose[0]) + self.origin[0]) * self.resolution)
-            self.y_camera_red = y_odom_index + int(((self.depth_red + self.odom_pose[1]) + self.origin[1]) * self.resolution)
-            cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
-            self.depth_red = 0
+            self.y_camera_red = int(x_odom_index + self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2]))
+            self.x_camera_red = int(y_odom_index + self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2]))
+            cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)          
 
         if self.depth_blue != 0:
-            self.x_camera_blue = x_odom_index + int((((-self.x_transform_blue)  - self.odom_pose[0]) + self.origin[0]) * self.resolution)
-            self.y_camera_blue = y_odom_index + int(((self.depth_blue + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            self.y_camera_blue = int(x_odom_index + self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2]))
+            self.x_camera_blue = int(y_odom_index + self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2]))
             cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
-            self.depth_blue = 0
 
         if self.depth_green != 0:
-            self.x_camera_green = x_odom_index + int((((-self.x_transform_green)  - self.odom_pose[0]) + self.origin[0]) * self.resolution)
-            self.y_camera_green = y_odom_index + int(((self.depth_green + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            self.y_camera_green = int(x_odom_index + self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2]))
+            self.x_camera_green = int(y_odom_index + self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2]))
             cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
-            self.depth_green = 0
 
         if self.depth_yellow != 0:
-            self.x_camera_yellow = x_odom_index + int((((-self.x_transform_yellow ) - self.odom_pose[0]) + self.origin[0]) * self.resolution)
-            self.y_camera_yellow = y_odom_index + int(((self.depth_yellow + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            self.y_camera_yellow = int(x_odom_index + self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2]))
+            self.x_camera_yellow = int(y_odom_index + self.depth_yellow * sin(self.angle_diff_yelow + pi - self.odom_pose[2]))
             cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
-            self.depth_yellow = 0
 
         # draw the robot
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
@@ -230,44 +237,56 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
-        self.depth_red = (r * self.depth_proportion + self.depth_intercept)
-        #print depth
-        self.y_transform_red = int(self.frame_height / 2 - y)
-        self.x_transform_red = int(x - self.frame_width / 2) /3
-        self.angle_diff_red = self.x_transform_red
+        if r != 0:
+            self.depth_red = (r * self.depth_proportion + self.depth_intercept)
+            #print depth
+            self.y_transform_red = int(self.frame_height / 2 - y)
+            self.x_transform_red = int(x - self.frame_width / 2) / 100
+            self.angle_diff_red = self.x_transform_red * pi/180.0
+        else:
+            self.depth_red = 0
 
     def coordinate_to_map_green(self, msg):
-        print 'hey green!'
         x = msg.x
         y = msg.y
         r = msg.z
 
-        self.depth_green = (r * self.depth_proportion + self.depth_intercept)
-        self.y_transform_green = int(self.frame_height / 2 - y)
-        self.x_transform_green = int(x - self.frame_width / 2) /3
-        self.angle_diff_green = self.x_transform_green
+        if r != 0:
+            self.depth_green = (r * self.depth_proportion + self.depth_intercept)
+            #print depth
+            self.y_transform_green = int(self.frame_height / 2 - y)
+            self.x_transform_green = int(x - self.frame_width / 2) / 100
+            self.angle_diff_green = self.x_transform_green * pi/180.0
+        else:
+            self.depth_green = 0
 
     def coordinate_to_map_blue(self, msg):
         x = msg.x
         y = msg.y
         r = msg.z
 
-        self.depth_blue = (r * self.depth_proportion + self.depth_intercept)
-        #print depth
-        self.y_transform_blue = int(self.frame_height / 2 - y)
-        self.x_transform_blue = int(x - self.frame_width / 2) /3
-        self.angle_diff_blue = self.x_transform_blue
+        if r != 0:
+            self.depth_blue = (r * self.depth_proportion + self.depth_intercept)
+            #print depth
+            self.y_transform_blue = int(self.frame_height / 2 - y)
+            self.x_transform_blue = int(x - self.frame_width / 2) / 100
+            self.angle_diff_blue = self.x_transform_blue * pi/180.0
+        else:
+            self.depth_blue = 0
 
     def coordinate_to_map_yellow(self, msg):
         x = msg.x
         y = msg.y
         r = msg.z
 
-        self.depth_yellow = (r * self.depth_proportion + self.depth_intercept)
-        #print depth
-        self.y_transform_yellow = int(self.frame_height / 2 - y)
-        self.x_transform_yellow = int(x - self.frame_width / 2) /3
-        self.angle_diff_yellow = self.x_transform_yellow /2
+        if r != 0:
+            self.depth_yellow = (r * self.depth_proportion + self.depth_intercept)
+            #print depth
+            self.y_transform_yellow = int(self.frame_height / 2 - y)
+            self.x_transform_yellow = int(x - self.frame_width / 2) / 100
+            self.angle_diff_yellow = self.x_transform_yellow * pi/180.0
+        else:
+            self.depth_red = 0
 
     @staticmethod
     def convert_pose_to_xy_and_theta(pose):
@@ -340,6 +359,7 @@ class ImageConverter:
         lower_green = np.array([60, 200, 10])
         upper_green = np.array([90, 255, 255])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
+
 
         if circles is not None:
             for c in circles[0, :]:
