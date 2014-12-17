@@ -1,0 +1,5 @@
+<launch>
+  <node name="dynamic_reconfigure_server" pkg="rescuebot" type="dynamic_reconfigure_server.py" />
+  <node name="image_converter" pkg="rescuebot" type="runner.py" output="screen" />
+  <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />
+</launch>
