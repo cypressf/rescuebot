@@ -49,7 +49,7 @@ class OccupancyGridMapper:
         #TODO Add stuff for each color, so can map more than one at a time
         self.frame_height = 480
         self.frame_width = 640
-        self.depth_proportion = -0.0025
+        self.depth_proportion = -0.8
         self.depth_intercept = 1.35
 
         self.red = (0, 0, 255)
@@ -195,24 +195,28 @@ class OccupancyGridMapper:
         # computer the ball locations so we can mark with a colored circle
         #TODO Track and relate the robot's angle pose for accuracy
         if self.depth_red != 0:
-            self.x_camera_red = x_odom_index + int(((-self.y_transform_red * cos(self.odom_pose[2]) + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-            self.y_camera_red = y_odom_index + int(((-self.depth_red * sin( self.odom_pose[2])+ self.odom_pose[1]) - self.origin[1]) * self.resolution)
-            cv2.circle(im, (self.y_camera_red, self.x_camera_red), 2, self.red)
+            self.x_camera_red = x_odom_index + int(((-self.x_transform_red - self.odom_pose[0]) + self.origin[0]) * self.resolution)
+            self.y_camera_red = y_odom_index + int(((self.depth_red + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
+            self.depth_red = 0
 
         if self.depth_blue != 0:
-            self.x_camera_blue = x_odom_index + int(((-self.y_transform_blue + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-            self.y_camera_blue = y_odom_index + int(((-self.depth_blue + self.odom_pose[1]) - self.origin[1]) * self.resolution)
-            cv2.circle(im, (self.y_camera_blue, self.x_camera_blue), 2, self.blue)
+            self.x_camera_blue = x_odom_index + int((((-self.x_transform_blue)  - self.odom_pose[0]) + self.origin[0]) * self.resolution)
+            self.y_camera_blue = y_odom_index + int(((self.depth_blue + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
+            self.depth_blue = 0
 
         if self.depth_green != 0:
-            self.x_camera_green = x_odom_index + int(((-self.y_transform_green + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-            self.y_camera_green = y_odom_index + int(((-self.depth_green + self.odom_pose[1]) - self.origin[1]) * self.resolution)
-            cv2.circle(im, (self.y_camera_green, self.x_camera_green), 2, self.green)
+            self.x_camera_green = x_odom_index + int((((-self.x_transform_green)  - self.odom_pose[0]) + self.origin[0]) * self.resolution)
+            self.y_camera_green = y_odom_index + int(((self.depth_green + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
+            self.depth_green = 0
 
         if self.depth_yellow != 0:
-            self.x_camera_yellow = x_odom_index + int(((-self.y_transform_yellow + self.odom_pose[0]) - self.origin[0]) * self.resolution)
-            self.y_camera_yellow = y_odom_index + int(((-self.depth_yellow + self.odom_pose[1]) - self.origin[1]) * self.resolution)
-            cv2.circle(im, (self.y_camera_yellow, self.x_camera_yellow), 2, self.yellow)
+            self.x_camera_yellow = x_odom_index + int((((-self.x_transform_yellow ) - self.odom_pose[0]) + self.origin[0]) * self.resolution)
+            self.y_camera_yellow = y_odom_index + int(((self.depth_yellow + self.odom_pose[1]) + self.origin[1]) * self.resolution)
+            cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
+            self.depth_yellow = 0
 
         # draw the robot
         cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
@@ -229,7 +233,7 @@ class OccupancyGridMapper:
         self.depth_red = (r * self.depth_proportion + self.depth_intercept)
         #print depth
         self.y_transform_red = int(self.frame_height / 2 - y)
-        self.x_transform_red = int(x - self.frame_width / 2)
+        self.x_transform_red = int(x - self.frame_width / 2) /3
         self.angle_diff_red = self.x_transform_red
 
     def coordinate_to_map_green(self, msg):
@@ -239,12 +243,8 @@ class OccupancyGridMapper:
         r = msg.z
 
         self.depth_green = (r * self.depth_proportion + self.depth_intercept)
-        print self.depth_green
-        print x
-        print y
-        print r
         self.y_transform_green = int(self.frame_height / 2 - y)
-        self.x_transform_green = int(x - self.frame_width / 2)
+        self.x_transform_green = int(x - self.frame_width / 2) /3
         self.angle_diff_green = self.x_transform_green
 
     def coordinate_to_map_blue(self, msg):
@@ -255,7 +255,7 @@ class OccupancyGridMapper:
         self.depth_blue = (r * self.depth_proportion + self.depth_intercept)
         #print depth
         self.y_transform_blue = int(self.frame_height / 2 - y)
-        self.x_transform_blue = int(x - self.frame_width / 2)
+        self.x_transform_blue = int(x - self.frame_width / 2) /3
         self.angle_diff_blue = self.x_transform_blue
 
     def coordinate_to_map_yellow(self, msg):
@@ -266,8 +266,8 @@ class OccupancyGridMapper:
         self.depth_yellow = (r * self.depth_proportion + self.depth_intercept)
         #print depth
         self.y_transform_yellow = int(self.frame_height / 2 - y)
-        self.x_transform_yellow = int(x - self.frame_width / 2)
-        self.angle_diff_yellow = self.x_transform_yellow
+        self.x_transform_yellow = int(x - self.frame_width / 2) /3
+        self.angle_diff_yellow = self.x_transform_yellow /2
 
     @staticmethod
     def convert_pose_to_xy_and_theta(pose):
@@ -615,10 +615,10 @@ class Controller:
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
     ic = ImageConverter()
-    rescuebot = Controller()
+    #rescuebot = Controller()
     star_center = OccupancyGridMapper()
     try:
-        rescuebot.run()
+        #rescuebot.run()
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
