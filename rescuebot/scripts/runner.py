@@ -46,7 +46,7 @@ class OccupancyGridMapper:
         rospy.Subscriber("scan", LaserScan, self.process_scan, queue_size=1)
         # self.pub = rospy.Publisher("map", OccupancyGrid)
         self.ycoor_pub = rospy.Publisher("/yellow_coords", Marker)
-        self.bcoor_pub = rospy.Publisher("/blue_coords", Vector3)
+        self.bcoor_pub = rospy.Publisher("/blue_coords", Marker)
         self.rcoor_pub = rospy.Publisher("/red_coords", Marker)
         self.gcoor_pub = rospy.Publisher("/green_coords", Marker)
         self.coords_sub_red = rospy.Subscriber('ball_coords_red', Vector3, self.coordinate_to_map_red)
@@ -139,18 +139,18 @@ class OccupancyGridMapper:
 
             real_red_y = self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])
             real_red_x = self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])
-            rospy.loginfo("red coords: {}, {}".format(self.x_camera_red, self.y_camera_red))
-            self.rcoor_pub.publish(self.make_marker("red", Vector3(self.x_camera_red, self.y_camera_red, 0)))
+            self.rcoor_pub.publish(self.make_marker("red", Vector3(real_red_x, real_red_y, 0)))
 
 
         if self.depth_blue > 0:
             self.y_camera_blue = int(x_odom_index - self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_blue = int(y_odom_index - self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
 
-            real_blue_y = self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])
-            real_blue_x = self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])
+            real_blue_y = self.depth_blue * cos(self.angle_diff_blue + .6 - self.odom_pose[2])
+            real_blue_x = self.depth_blue * sin(self.angle_diff_blue + .6 - self.odom_pose[2])
+            rospy.loginfo("blue coords: {}, {}".format(real_blue_x, real_blue_y))
 
-            self.bcoor_pub.publish(Vector3(-real_blue_x, -real_blue_y/2, 0))
+            self.bcoor_pub.publish(self.make_marker("blue", Vector3(real_blue_x, real_blue_y, 0)))
 
         if self.depth_green > 0:
             self.y_camera_green = int(x_odom_index - self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
@@ -174,7 +174,7 @@ class OccupancyGridMapper:
         marker = Marker()
         marker.header.frame_id = "/map"
         marker.type = marker.SPHERE
-        marker.action = marker.MODIFY
+        marker.action = marker.ADD
         marker.scale.x = 0.2
         marker.scale.y = 0.2
         marker.scale.z = 0.2
@@ -253,10 +253,10 @@ class OccupancyGridMapper:
 class Output:
     def __init__(self):
         print 'Im Outputter!'
-        self.ycoords_sub = rospy.Subscriber("/yellow_coords", Vector3, self.find_yellow)
-        self.gcoords_sub = rospy.Subscriber("/green_coords", Vector3, self.find_green)
-        self.rcoords_sub = rospy.Subscriber("/red_coords", Vector3, self.find_red)
-        self.bcoords_sub = rospy.Subscriber("/blue_coords", Vector3, self.find_blue)
+        # self.ycoords_sub = rospy.Subscriber("/yellow_coords", Vector3, self.find_yellow)
+        # self.gcoords_sub = rospy.Subscriber("/green_coords", Vector3, self.find_green)
+        # self.rcoords_sub = rospy.Subscriber("/red_coords", Vector3, self.find_red)
+        # self.bcoords_sub = rospy.Subscriber("/blue_coords", Vector3, self.find_blue)
 
         self.yx = []
         self.yy = []
@@ -530,7 +530,7 @@ class Controller:
             lead_avg = self.lead_right_avg
             trailing_avg = self.trailing_right_avg
         elif self.side == 'left':
-            rospy.loginfo('left')
+            # rospy.loginfo('left')
             lead_avg = self.lead_left_avg
             trailing_avg = self.trailing_left_avg
         else:
@@ -558,7 +558,7 @@ class Controller:
                     linear_velocity = 0
                 if self.side == "left":
                     angular_velocity = -angular_velocity
-                rospy.loginfo("not at goal distance from wall. goal angle: {}, current_angle: {:.3f}".format(goal_angle, angle_to_wall))
+                # rospy.loginfo("not at goal distance from wall. goal angle: {}, current_angle: {:.3f}".format(goal_angle, angle_to_wall))
             else:
                 proportional_distance = (lead_avg - trailing_avg) / (lead_avg + trailing_avg) * self.wall_maintain_constant
                 angular_velocity = -proportional_distance
@@ -567,7 +567,7 @@ class Controller:
                     angular_velocity = -self.MAX_ANGULAR_SPEED
                 if trailing_avg == 0:
                     angular_velocity = self.MAX_ANGULAR_SPEED
-                rospy.loginfo("at goal distance from wall. angular velocity: {:.4f}, lead: {:.4f}, trailing: {:.4f}".format(angular_velocity, lead_avg, trailing_avg))
+                # rospy.loginfo("at goal distance from wall. angular velocity: {:.4f}, lead: {:.4f}, trailing: {:.4f}".format(angular_velocity, lead_avg, trailing_avg))
                 linear_velocity *= np.interp(np.abs(angular_velocity), [0, self.MAX_ANGULAR_SPEED], [1, 0.1])
                 if linear_velocity < 0:
                     linear_velocity = 0
@@ -584,7 +584,7 @@ class Controller:
         if self.side == 'left':
             angular_velocity = -angular_velocity
 
-        rospy.loginfo("angular velocity {:.4f}".format(angular_velocity))
+        # rospy.loginfo("angular velocity {:.4f}".format(angular_velocity))
         return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
 
     def get_lead_left_points(self):
