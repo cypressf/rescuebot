@@ -17,8 +17,11 @@ from matplotlib.pyplot import imshow
 import cv2
 import numpy as np
 import time
+import pickle
 import dynamic_reconfigure.client
+import os.path
 
+saved_config_file_name = os.path.join(os.path.dirname(__file__), "saved_configuration.txt")
 
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
@@ -433,10 +436,16 @@ class Controller:
         self.trailing_left_avg = 0
         self.trailing_right_avg = 0
 
-        self.get_cmd_vel = self.room_center
+        self.get_cmd_vel = self.follow_wall
 
         self.points = []
         self.filtered_points = []
+
+    def get_cmd_vel_safe(self):
+        cmd_vel = self.get_cmd_vel()
+        linear_velocity_obstacle = self.obstacle_avoid()
+        cmd_vel.linear.x = min(cmd_vel.linear.x, linear_velocity_obstacle)
+        return cmd_vel
 
     def laser_scan_received(self, laser_scan_message):
         """Process laser scan points from LiDAR"""
@@ -466,9 +475,6 @@ class Controller:
             self.side = "none"
 
     def follow_wall(self):
-        # if self.get_danger_points():
-        #     self.get_cmd_vel = self.obstacle_avoid
-        #     return self.obstacle_avoid()
 
         linear_velocity = self.MAX_LINEAR_SPEED
 
@@ -634,31 +640,50 @@ class Controller:
             self.get_cmd_vel = self.follow_wall
             return self.follow_wall()
 
-        if len(left_danger_points) < len(right_danger_points):
-            return self.turn_left(len(right_danger_points))
+        if len(left_danger_points) > len(right_danger_points):
+            turn_towards = "right"
+            danger_points = left_danger_points
         else:
-            return self.turn_right(len(left_danger_points))
+            turn_towards = "left"
+            danger_points = right_danger_points
 
-    def turn_left(self, num_danger_points):
-        angular_velocity = Vector3(z=num_danger_points * self.DANGER_POINTS_MULTIPLIER * self.MAX_ANGULAR_SPEED)
-        linear_velocity = Vector3(x=self.MAX_LINEAR_SPEED * (1 - num_danger_points * self.DANGER_POINTS_MULTIPLIER))
-        return Twist(angular=angular_velocity, linear=linear_velocity)
+        num_danger_points = len(danger_points)
+        closest_point = min(danger_points)
 
-    def turn_right(self, num_danger_points):
-        angular_velocity = Vector3(z=num_danger_points * self.DANGER_POINTS_MULTIPLIER * -self.MAX_ANGULAR_SPEED)
-        linear_velocity = Vector3(x=self.MAX_LINEAR_SPEED * (1 - num_danger_points * self.DANGER_POINTS_MULTIPLIER))
-        return Twist(angular=angular_velocity, linear=linear_velocity)
+        linear_velocity_scaling = np.interp(closest_point.length, [.25, 0.7], [-0.6, 1])
+        linear_velocity_scaling = np.min([linear_velocity_scaling, 1])
+        linear_velocity = Vector3(x=self.MAX_LINEAR_SPEED * linear_velocity_scaling)
+
+        angular_velocity_scaling = np.interp(closest_point.length, [.25, 0.7], [1, 0.5])
+        angular_velocity_scaling = np.max(angular_velocity_scaling, 0.5)
+
+        angular_velocity = angular_velocity_scaling * self.MAX_ANGULAR_SPEED
+
+        if turn_towards == "right":
+            angular_velocity *= -1
+
+        angular_velocity = Vector3(z=angular_velocity)
+        rospy.loginfo("obstacle avoid ")
+        return linear_velocity
 
     def run(self):
         """Subscribe to the laser scan data and images."""
         self.running = True
-        dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=5, config_callback=self.dynamic_reconfigure_callback)
+        reconfigure_client = dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=5, config_callback=self.dynamic_reconfigure_callback)
+        try:
+            with open(saved_config_file_name, 'r') as config_file:
+                config = pickle.load(config_file)
+                reconfigure_client.update_configuration(config)
+                rospy.loginfo("Reconfiguring using saved configuration file.")
+        except EnvironmentError:
+            rospy.loginfo("No saved configuration file found. Using defaults.")
+
         rate = rospy.Rate(20)
         while not self.points:
             rate.sleep()
             rospy.loginfo("no points yet")
         while not rospy.is_shutdown() and self.running:
-            cmd_vel = self.get_cmd_vel()
+            cmd_vel = self.get_cmd_vel_safe()
             self.pub.publish(cmd_vel)
             rate.sleep()
 
@@ -684,7 +709,12 @@ class Controller:
         self.wall_maintain_constant = config["wall_maintain_constant"]
         self.lost_robot_speed_multiplier = config["lost_robot_speed_multiplier"]
         self.goal_distance_to_goal_angle = config["goal_distance_to_goal_angle"]
-        rospy.loginfo(config)
+        with open(saved_config_file_name, 'w') as f:
+            if "groups" in config:
+                del config["groups"]
+            pickle.dump(config, f)
+            rospy.loginfo("saving configuration file after receiving new configuration")
+
 
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
