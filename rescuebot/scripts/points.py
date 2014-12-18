@@ -11,7 +11,7 @@ def ranges_to_points(ranges):
 
 
 def filter_points(points):
-    return [point for point in points if point.length]
+    return [point for point in points if point.length != 0]
 
 
 class LaserPoint:
