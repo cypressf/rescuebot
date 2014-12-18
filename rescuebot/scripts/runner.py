@@ -3,6 +3,7 @@ from __future__ import division
 from geometry_msgs.msg import Twist, Vector3, PoseStamped, Pose
 from std_msgs.msg import Header
 from nav_msgs.msg import OccupancyGrid
+from visualization_msgs.msg import Marker
 from sensor_msgs.msg import Image, LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 from points import LaserPoint, ranges_to_points, filter_points
@@ -28,12 +29,12 @@ class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
 
     def __init__(self):
-        cv2.namedWindow("map")
+        # cv2.namedWindow("map")
 
         #Establish mapping conventions
-        self.origin = [-10, -10]
+        self.origin = [-51.225, -51.225]
         self.seq = 0
-        self.resolution = .1
+        self.resolution = .05
         self.n = 200
         self.p_occ = .5
         self.odds_ratio_hit = 3.0
@@ -43,11 +44,11 @@ class OccupancyGridMapper:
 
         #Subscribers and Publishers
         rospy.Subscriber("scan", LaserScan, self.process_scan, queue_size=1)
-        self.pub = rospy.Publisher("map", OccupancyGrid)
-        self.ycoor_pub = rospy.Publisher("/yellow_coords", Vector3)
+        # self.pub = rospy.Publisher("map", OccupancyGrid)
+        self.ycoor_pub = rospy.Publisher("/yellow_coords", Marker)
         self.bcoor_pub = rospy.Publisher("/blue_coords", Vector3)
-        self.rcoor_pub = rospy.Publisher("/red_coords", Vector3)
-        self.gcoor_pub = rospy.Publisher("/green_coords", Vector3)
+        self.rcoor_pub = rospy.Publisher("/red_coords", Marker)
+        self.gcoor_pub = rospy.Publisher("/green_coords", Marker)
         self.coords_sub_red = rospy.Subscriber('ball_coords_red', Vector3, self.coordinate_to_map_red)
         self.coords_sub_green = rospy.Subscriber('ball_coords_green', Vector3, self.coordinate_to_map_green)
         self.coords_sub_blue = rospy.Subscriber('ball_coords_blue', Vector3, self.coordinate_to_map_blue)
@@ -99,12 +100,12 @@ class OccupancyGridMapper:
         self.y_camera_yellow = -1
         rospy.loginfo('Mapper running')
 
-    def is_in_map(self, x_ind, y_ind):
-        """ Return whether or not the given point is within the map boundaries """
-        return not (x_ind < self.origin[0] or
-                    x_ind > self.origin[0] + self.n * self.resolution or
-                    y_ind < self.origin[1] or
-                    y_ind > self.origin[1] + self.n * self.resolution)
+    # def is_in_map(self, x_ind, y_ind):
+    #     """ Return whether or not the given point is within the map boundaries """
+    #     return not (x_ind < self.origin[0] or
+    #                 x_ind > self.origin[0] + self.n * self.resolution or
+    #                 y_ind < self.origin[1] or
+    #                 y_ind > self.origin[1] + self.n * self.resolution)
 
     def process_scan(self, msg):
         """ Callback function for the laser scan messages """
@@ -120,77 +121,6 @@ class OccupancyGridMapper:
         #(-0.0069918, 0.000338577, 0.048387097)
         #(1.0208817, 0.04827240, 0.048387)
         self.base_pose = OccupancyGridMapper.convert_pose_to_xy_and_theta(self.base_pose.pose)
-        for i in range(len(msg.ranges)):
-            if 0.0 < msg.ranges[i] < 5.0: #for any reding within 5 meters
-                #Using the pose and the measurement nd the angle, find it in the world
-                map_x = self.odom_pose[0] + msg.ranges[i] * cos(i * pi / 180.0 + self.odom_pose[2])
-                map_y = self.odom_pose[1] + msg.ranges[i] * -sin(i * pi / 180.0 + self.odom_pose[2])
-
-                #Relate that map measure with a place in the picture
-                x_detect = int((map_x - self.origin[0]) / self.resolution)
-                y_detect = int((map_y - self.origin[1]) / self.resolution)
-
-
-                #Determine how to mark the location in the map, along with the stuff inbetween
-                u = (map_x - self.odom_pose[0], map_y - self.odom_pose[1])
-                magnitude = sqrt(u[0] ** 2 + u[1] ** 2)
-                n_steps = max([1, int(ceil(magnitude / self.resolution))])
-                u_step = (u[0] / (n_steps - 1), u[1] / (n_steps - 1))
-                marked = set()
-                for i in range(n_steps):
-                    curr_x = self.odom_pose[0] + i * u_step[0]
-                    curr_y = self.odom_pose[1] + i * u_step[1]
-                    if not (self.is_in_map(curr_x, curr_y)):
-                        break
-
-                    x_ind = int((curr_x - self.origin[0]) / self.resolution)
-                    y_ind = int((curr_y - self.origin[1]) / self.resolution)
-                    if x_ind == x_detect and y_ind == y_detect:
-                        break
-                    if not ((x_ind, y_ind) in marked):
-                        # odds ratio is updated according to the inverse sensor model
-                        self.odds_ratios[x_ind, y_ind] *= self.p_occ / (1 - self.p_occ) * self.odds_ratio_miss
-                        marked.add((x_ind, y_ind))
-                if self.is_in_map(map_x, map_y):
-                    # odds ratio is updated according to the inverse sensor model
-                    self.odds_ratios[x_detect, y_detect] *= self.p_occ / (1 - self.p_occ) * self.odds_ratio_hit
-
-        self.seq += 1
-        # to save time, only publish the map every 10 scans that we process
-        if self.seq % 10 == 0:
-            # make occupancy grid
-            map = OccupancyGrid()
-            map.header.seq = self.seq
-            self.seq += 1
-            map.header.stamp = msg.header.stamp
-            map.header.frame_id = "map"  # the name of the coordinate frame of the map
-            map.info.origin.position.x = self.origin[0]
-            map.info.origin.position.y = self.origin[1]
-            map.info.width = self.n
-            map.info.height = self.n
-            map.info.resolution = self.resolution
-            map.data = [0] * self.n ** 2  # map.data stores the n by n grid in row-major order
-            for i in range(self.n):
-                for j in range(self.n):
-                    idx = i + self.n * j  # this implements row major order
-                    if self.odds_ratios[i, j] < 1 / 5.0:  # consider a cell free if odds ratio is low enough
-                        map.data[idx] = 0
-                    elif self.odds_ratios[i, j] > 5.0:  # consider a cell occupied if odds ratio is high enough
-                        map.data[idx] = 100
-                    else:  # otherwise cell is unknown
-                        map.data[idx] = -1
-            self.pub.publish(map)
-
-        # create the image from the probabilities so we can visualize using opencv
-        im = np.zeros((self.odds_ratios.shape[0], self.odds_ratios.shape[1], 3))
-        for i in range(im.shape[0]):
-            for j in range(im.shape[1]):
-                if self.odds_ratios[i, j] < 1 / 5.0:
-                    im[i, j, :] = 1.0
-                elif self.odds_ratios[i, j] > 5.0:
-                    im[i, j, :] = 0.0
-                else:
-                    im[i, j, :] = 0.5
 
         # compute the index of the odometry pose so we can mark it with a circle
         x_odom_index = int((self.odom_pose[0] - self.origin[0]) / self.resolution)
@@ -206,55 +136,55 @@ class OccupancyGridMapper:
         if self.depth_red > 0:
             self.y_camera_red = int(x_odom_index - self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_red = int(y_odom_index - self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
 
             real_red_y = self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])
             real_red_x = self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])
+            rospy.loginfo("red coords: {}, {}".format(self.x_camera_red, self.y_camera_red))
+            self.rcoor_pub.publish(self.make_marker("red", Vector3(self.x_camera_red, self.y_camera_red, 0)))
 
-            self.rcoor_pub.publish(Vector3(-real_red_x, -real_red_y/2, 0))
-        else:
-             cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
 
         if self.depth_blue > 0:
             self.y_camera_blue = int(x_odom_index - self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_blue = int(y_odom_index - self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
 
             real_blue_y = self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])
             real_blue_x = self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])
 
             self.bcoor_pub.publish(Vector3(-real_blue_x, -real_blue_y/2, 0))
-        else:
-            cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
 
         if self.depth_green > 0:
             self.y_camera_green = int(x_odom_index - self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_green = int(y_odom_index - self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
-            
+
             real_green_y = self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])
             real_green_x = self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])
-
-            self.gcoor_pub.publish(Vector3(-real_green_x, -real_green_y/2, 0))
+            self.gcoor_pub.publish(self.make_marker("green", Vector3(-real_green_x, -real_green_y/2, 0)))
 
         if self.depth_yellow > 0:
             self.y_camera_yellow = int(x_odom_index - self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_yellow = int(y_odom_index - self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
-            
+
             real_yellow_y = self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])
             real_yellow_x = self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])
 
-            self.ycoor_pub.publish(Vector3(-real_yellow_x, -real_yellow_y/2, 0))
-        else:
-            cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
+            self.ycoor_pub.publish(self.make_marker("yellow", Vector3(-real_yellow_x, -real_yellow_y/2, 0)))
 
-        # draw the robot
-        cv2.circle(im, (y_odom_index, x_odom_index), 2, (255, 0, 0))
-        
-        # display the image resized
-        cv2.imshow("map", cv2.resize(im, (500, 500)))
-        cv2.waitKey(20)
+
+    def make_marker(self, color, coords):
+        marker = Marker()
+        marker.header.frame_id = "/map"
+        marker.type = marker.SPHERE
+        marker.action = marker.MODIFY
+        marker.scale.x = 0.2
+        marker.scale.y = 0.2
+        marker.scale.z = 0.2
+        marker.color.a = 1.0
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = coords.x
+        marker.pose.position.y = coords.y
+        marker.pose.position.z = coords.z
+        marker.id = 123
+        return marker
 
     def coordinate_to_map_red(self, msg):
         x = msg.x
