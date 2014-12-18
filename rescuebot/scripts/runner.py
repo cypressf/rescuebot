@@ -16,6 +16,7 @@ from math import cos, sin, pi, sqrt, ceil
 from matplotlib.pyplot import imshow
 import cv2
 import numpy as np
+from scipy.stats import mode
 import dynamic_reconfigure.client
 
 
@@ -40,6 +41,10 @@ class OccupancyGridMapper:
         #Subscribers and Publishers
         rospy.Subscriber("scan", LaserScan, self.process_scan, queue_size=1)
         self.pub = rospy.Publisher("map", OccupancyGrid)
+        self.ycoor_pub = rospy.Publisher("/yellow_coords", Vector3)
+        self.bcoor_pub = rospy.Publisher("/blue_coords", Vector3)
+        self.rcoor_pub = rospy.Publisher("/red_coords", Vector3)
+        self.gcoor_pub = rospy.Publisher("/green_coords", Vector3)
         self.coords_sub_red = rospy.Subscriber('ball_coords_red', Vector3, self.coordinate_to_map_red)
         self.coords_sub_green = rospy.Subscriber('ball_coords_green', Vector3, self.coordinate_to_map_green)
         self.coords_sub_blue = rospy.Subscriber('ball_coords_blue', Vector3, self.coordinate_to_map_blue)
@@ -50,9 +55,7 @@ class OccupancyGridMapper:
         self.frame_height = 480
         self.frame_width = 640
         self.depth_proportion = -0.013
-        self.depth_proportion_blue = -0.013
         self.depth_intercept = 2.105
-        self.depth_intercept_blue = 2.105
 
         #85pixels - 1meter
         #62pixels - 1.3meter
@@ -99,22 +102,6 @@ class OccupancyGridMapper:
                     y_ind < self.origin[1] or
                     y_ind > self.origin[1] + self.n * self.resolution)
 
-    # def process_color_and_coordinate(self, msg):
-    #     """ Parse the Twist message into usable tupple, takes in data from color Subscriber"""
-    #     tuple_color = (int(color.x), int(color.y), int(color.z))
-    #     if tuple_color == (0, 0, 255):
-    #         self.red = tuple_color
-    #         self.coordinate_to_map_red(msg[color])
-    #     elif tuple_color == (255, 0, 0):
-    #         self.blue = tuple_color
-    #         self.coordinate_to_map_blue(msg[color])
-    #     elif tuple_color == (0, 255, 0):
-    #         self.green = tuple_color
-    #         self.coordinate_to_map_green(msg[color])
-    #     elif tuple_color == (0, 255, 255):
-    #         self.yellow = tuple_color
-    #         self.coordinate_to_map_yellow(msg[color])
-
     def process_scan(self, msg):
         """ Callback function for the laser scan messages """
         if len(msg.ranges) <= 330:
@@ -126,6 +113,8 @@ class OccupancyGridMapper:
         self.base_pose = self.tf_listener.transformPose("base_laser_link", p)
         # convert the odom pose to the tuple (x,y,theta)
         self.odom_pose = OccupancyGridMapper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
+        #(-0.0069918, 0.000338577, 0.048387097)
+        #(1.0208817, 0.04827240, 0.048387)
         self.base_pose = OccupancyGridMapper.convert_pose_to_xy_and_theta(self.base_pose.pose)
         for i in range(len(msg.ranges)):
             if 0.0 < msg.ranges[i] < 5.0: #for any reding within 5 meters
@@ -214,13 +203,23 @@ class OccupancyGridMapper:
             self.y_camera_red = int(x_odom_index - self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_red = int(y_odom_index - self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
+
+            real_red_y = self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])
+            real_red_x = self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])
+
+            self.rcoor_pub.publish(Vector3(-real_red_x, -real_red_y/2, 0))
         else:
-             cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)     
+             cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
 
         if self.depth_blue > 0:
             self.y_camera_blue = int(x_odom_index - self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_blue = int(y_odom_index - self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
+            cv2.circle(im, (100 - self.x_camera_blue, 100 - self.y_camera_blue), 1, self.blue)
+
+            real_blue_y = self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])
+            real_blue_x = self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])
+
+            self.bcoor_pub.publish(Vector3(-real_blue_x, -real_blue_y/2, 0))
         else:
             cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
 
@@ -228,13 +227,21 @@ class OccupancyGridMapper:
             self.y_camera_green = int(x_odom_index - self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_green = int(y_odom_index - self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
-        else:
-            cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
+            
+            real_green_y = self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])
+            real_green_x = self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])
+
+            self.gcoor_pub.publish(Vector3(-real_green_x, -real_green_y/2, 0))
 
         if self.depth_yellow > 0:
             self.y_camera_yellow = int(x_odom_index - self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_yellow = int(y_odom_index - self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
+            
+            real_yellow_y = self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])
+            real_yellow_x = self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])
+
+            self.ycoor_pub.publish(Vector3(-real_yellow_x, -real_yellow_y/2, 0))
         else:
             cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
 
@@ -278,11 +285,8 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
-        # print 'raw pixels' 
-        # print r
-
         if r != 0:
-            self.depth_blue = (r * self.depth_proportion_blue + self.depth_intercept_blue)
+            self.depth_blue = (r * self.depth_proportion + self.depth_intercept)
             #print depth
             self.y_transform_blue = int(self.frame_height / 2 - y)
             self.x_transform_blue = int(x - self.frame_width / 2) / 100
@@ -295,7 +299,6 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
-        print r
         if r != 0:
             self.depth_yellow = (r * self.depth_proportion + self.depth_intercept)
             #print depth
@@ -312,6 +315,84 @@ class OccupancyGridMapper:
         angles = euler_from_quaternion(orientation_tuple)
         return pose.position.x, pose.position.y, angles[2]
 
+
+class Output:
+    def __init__(self):
+        print 'Im Outputter!'
+        self.ycoords_sub = rospy.Subscriber("/yellow_coords", Vector3, self.find_yellow)
+        self.gcoords_sub = rospy.Subscriber("/green_coords", Vector3, self.find_green)
+        self.rcoords_sub = rospy.Subscriber("/red_coords", Vector3, self.find_red)
+        self.bcoords_sub = rospy.Subscriber("/blue_coords", Vector3, self.find_blue)
+
+        self.yx = []
+        self.yy = []
+        self.gx = []
+        self.gy = []
+        self.rx = []
+        self.ry = []
+        self.bx = []
+        self.by = []
+
+    def find_yellow(self, msg):
+        x = msg.x
+        y = msg.y
+
+        self.yx.append(x)
+        self.yy.append(y)
+
+        x_coord = np.median(self.yx)
+        y_coord = np.median(self.yy)
+
+        print 'yellow'
+        print (x_coord,y_coord)
+
+    def find_green(self, msg):
+        x = msg.x
+        y = msg.y
+
+        self.gx.append(x)
+        self.gy.append(y)
+
+        datax = np.array(self.gx)
+        datay = np.array(self.gy)
+
+        x_coord = np.median(self.gx)
+        y_coord = np.median(self.gy)
+
+        print 'green'
+        print (x_coord,y_coord)
+
+    def find_red(self, msg):
+        x = msg.x
+        y = msg.y
+
+        self.rx.append(x)
+        self.ry.append(y)
+
+        datax = np.array(self.rx)
+        datay = np.array(self.ry)
+
+        x_coord = np.median(self.rx)
+        y_coord = np.median(self.ry)
+
+        print 'red'
+        print (x_coord,y_coord)
+
+    def find_blue(self, msg):
+        x = msg.x
+        y = msg.y
+
+        self.bx.append(x)
+        self.by.append(y)
+
+        datax = np.array(self.bx)
+        datay = np.array(self.by)
+
+        x_coord = np.median(self.bx)
+        y_coord = np.median(self.by)
+
+        print 'blue'
+        print (x_coord,y_coord)
 
 class ImageConverter:
     def __init__(self):
@@ -336,7 +417,7 @@ class ImageConverter:
             print(e)
 
         #Image Processing
-        blur = cv2.medianBlur(cv_image, 7)
+        blur = cv2.medianBlur(cv_image, 15)
         gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 5, 50)
         self.find_circles(edges, cv_image)
@@ -361,19 +442,19 @@ class ImageConverter:
                                    minRadius=40, maxRadius=100)
         hsv_img = cv2.cvtColor(img_out, cv2.COLOR_BGR2HSV)
 
-        lower_red = np.array([0, 200, 0])
-        upper_red = np.array([20, 255, 255])
+        lower_red = np.array([0, 200, 150])
+        upper_red = np.array([25, 255, 255])
         mask_red = cv2.inRange(hsv_img, lower_red, upper_red)
 
-        lower_blue = np.array([50, 200, 0])
-        upper_blue = np.array([100, 255, 255])
+        lower_blue = np.array([100, 0, 0])
+        upper_blue = np.array([200, 255, 255])
         mask_blue = cv2.inRange(hsv_img, lower_blue, upper_blue)
 
-        lower_yellow = np.array([20, 200, 100])
+        lower_yellow = np.array([25, 200, 100])
         upper_yellow = np.array([30, 255, 200])
         mask_yellow = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
 
-        lower_green = np.array([60, 200, 10])
+        lower_green = np.array([60, 200, 100])
         upper_green = np.array([90, 255, 255])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
@@ -662,6 +743,7 @@ def main(args):
     ic = ImageConverter()
     #rescuebot = Controller()
     star_center = OccupancyGridMapper()
+    final_coords = Output()
     try:
         #rescuebot.run()
         rospy.spin()
