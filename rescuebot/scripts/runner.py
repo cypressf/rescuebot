@@ -83,14 +83,14 @@ class OccupancyGridMapper:
         self.x_transform_blue = 0
         self.angle_diff_blue = 0
 
-        self.x_camera_red = None
-        self.y_camera_red = None
-        self.x_camera_blue = None
-        self.y_camera_blue = None
-        self.x_camera_green = None
-        self.y_camera_green = None
-        self.x_camera_yellow = None
-        self.y_camera_yellow = None
+        self.x_camera_red = -1
+        self.y_camera_red = -1
+        self.x_camera_blue = -1
+        self.y_camera_blue = -1
+        self.x_camera_green = -1
+        self.y_camera_green = -1
+        self.x_camera_yellow = -1
+        self.y_camera_yellow = -1
 
     def is_in_map(self, x_ind, y_ind):
         """ Return whether or not the given point is within the map boundaries """
@@ -210,24 +210,32 @@ class OccupancyGridMapper:
         # computer the ball locations so we can mark with a colored circle
         #TODO Track and relate the robot's angle pose for accuracy
 
-        if self.depth_red != 0:
+        if self.depth_red > 0:
             self.y_camera_red = int(x_odom_index - self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_red = int(y_odom_index - self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)          
+            cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
+        else:
+             cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)     
 
-        if self.depth_blue != 0:
+        if self.depth_blue > 0:
             self.y_camera_blue = int(x_odom_index - self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_blue = int(y_odom_index - self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
+        else:
+            cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
 
-        if self.depth_green != 0:
+        if self.depth_green > 0:
             self.y_camera_green = int(x_odom_index - self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_green = int(y_odom_index - self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
+        else:
+            cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
 
-        if self.depth_yellow != 0:
+        if self.depth_yellow > 0:
             self.y_camera_yellow = int(x_odom_index - self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_yellow = int(y_odom_index - self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
+            cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
+        else:
             cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
 
         # draw the robot
@@ -287,13 +295,13 @@ class OccupancyGridMapper:
         y = msg.y
         r = msg.z
 
+        print r
         if r != 0:
             self.depth_yellow = (r * self.depth_proportion + self.depth_intercept)
             #print depth
             self.y_transform_yellow = int(self.frame_height / 2 - y)
             self.x_transform_yellow = int(x - self.frame_width / 2) / 100
             self.angle_diff_yellow = self.x_transform_yellow * pi/180.0
-            print self.depth_yellow
         else:
             self.depth_yellow = 0
 
@@ -397,6 +405,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 255), 3)
                     #print (c[0],c[1],c[2])
                     self.ball_location_yellow = Vector3(c[0], c[1], c[2])
+                else:
+                    self.ball_location_yellow = Vector3(0,0,0)
 
                 if mean_blue[0] > 50:
                     #print mean
@@ -407,6 +417,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), 2, (255, 0, 0), 3)
                     #print (c[0],c[1],c[2])
                     self.ball_location_blue = Vector3(c[0], c[1], c[2])
+                else:
+                    self.ball_location_blue = Vector3(0,0,0)
 
                 if mean_red[0] > 100:
                     #print mean
@@ -417,6 +429,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
                     #print (c[0],c[1],c[2])
                     self.ball_location_red = Vector3(c[0], c[1], c[2])
+                else:
+                    self.ball_location_red = Vector3(0,0,0)
 
                 if mean_green[0] > 50:
                     #print mean
@@ -427,6 +441,8 @@ class ImageConverter:
                     cv2.circle(img_out, (c[0], c[1]), 2, (0, 255, 0), 3)
                     #print (c[0],c[1],c[2])
                     self.ball_location_green = Vector3(c[0], c[1], c[2])
+                else:
+                    self.ball_location_green = Vector3(0,0,0)
 
 
 class Controller:
