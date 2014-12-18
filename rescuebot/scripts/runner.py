@@ -420,7 +420,12 @@ class Controller:
         self.ROOM_CENTER_CUTOFF = 0.5
         self.room_center_number_points = 60
         self.angle_wall_tolerance = 0.1
-        self.wall_distance_constant = 0.5
+        self.goal_distance_to_goal_angle = 0.5
+        self.num_wall_points = 5
+        self.approach_wall_constant = 8
+        self.angle_offset_for_zero_speed = 1/8
+        self.wall_maintain_constant = 1
+        self.lost_robot_speed_multiplier = 0.5
 
         self.side = None
         self.lead_left_avg = 0
@@ -440,28 +445,25 @@ class Controller:
         self.filtered_points = filter_points(self.points)
 
         # Process some of the data
-        lead_left_distance = []
-        lead_right_distance = []
-        trailing_left_distance = []
-        trailing_right_distance = []
-        for i in range(11):
-            if 0 < laser_scan_message.ranges[i + 40] < 2:
-                lead_left_distance.append(laser_scan_message.ranges[i + 40])
-            if 0 < laser_scan_message.ranges[i + 130] < 2:
-                trailing_left_distance.append(laser_scan_message.ranges[i + 130])
-            if 0 < laser_scan_message.ranges[i + 310] < 2:
-                lead_right_distance.append(laser_scan_message.ranges[i + 310])
-            if 0 < laser_scan_message.ranges[i + 220] < 2:
-                trailing_right_distance.append(laser_scan_message.ranges[i + 220])
-        if len(lead_left_distance) + len(trailing_left_distance) > len(trailing_right_distance) + len(
-                lead_right_distance):
-            self.lead_left_avg = sum(lead_left_distance) / float(len(lead_left_distance) + 0.1)
-            self.trailing_left_avg = sum(trailing_left_distance) / float(len(trailing_left_distance) + 0.1)
-            self.side = 'left'
+        lead_left_distance = laser_scan_message.ranges[50 - self.num_wall_points:50 + self.num_wall_points]
+        trailing_left_distance = laser_scan_message.ranges[130 - self.num_wall_points:130 + self.num_wall_points]
+        trailing_right_distance = laser_scan_message.ranges[230 - self.num_wall_points:230 + self.num_wall_points]
+        lead_right_distance = laser_scan_message.ranges[310 - self.num_wall_points:310 + self.num_wall_points]
+
+        self.lead_left_avg = np.mean(lead_left_distance)
+        self.trailing_left_avg = np.mean(trailing_left_distance)
+        self.lead_right_avg = np.mean(lead_right_distance)
+        self.trailing_right_avg = np.mean(trailing_right_distance)
+
+        wall_point = self.get_point_to_wall()
+        if wall_point:
+            wall_angle = wall_point.angle_radians / (2 * pi)
+            if wall_angle < 1/2:
+                self.side = "left"
+            else:
+                self.side = "right"
         else:
-            self.lead_right_avg = sum(lead_right_distance) / float(len(lead_right_distance) + 0.1)
-            self.trailing_right_avg = sum(trailing_right_distance) / float(len(trailing_right_distance) + 0.1)
-            self.side = 'right'
+            self.side = "none"
 
     def follow_wall(self):
         # if self.get_danger_points():
@@ -471,65 +473,86 @@ class Controller:
         linear_velocity = self.MAX_LINEAR_SPEED
 
         if self.side == 'right':
-            rospy.loginfo('right')
-            angular_velocity = self.follow_wall_helper(self.lead_right_avg, self.trailing_right_avg, 'right')
-
+            # rospy.loginfo('right')
+            lead_avg = self.lead_right_avg
+            trailing_avg = self.trailing_right_avg
         elif self.side == 'left':
             rospy.loginfo('left')
-            angular_velocity = -self.follow_wall_helper(self.lead_left_avg, self.trailing_left_avg, 'left')
-
+            lead_avg = self.lead_left_avg
+            trailing_avg = self.trailing_left_avg
         else:
-            linear_velocity = 0.0
-            angular_velocity = 0.0
+            lead_avg = 0
+            trailing_avg = 0
 
-        return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
-
-    def follow_wall_helper(self, lead_avg, trailing_avg, wall_direction):
         point_to_wall = self.get_point_to_wall()
-        if point_to_wall:
+        if point_to_wall and lead_avg + trailing_avg != 0:
             angle_to_wall = point_to_wall.angle_radians / (2 * pi)
             distance_to_wall = point_to_wall.length
+            if not self.WALL_FOLLOW_DISTANCE - 0.1 < distance_to_wall < self.WALL_FOLLOW_DISTANCE + 0.1:
+                goal_angle = (self.WALL_FOLLOW_DISTANCE - distance_to_wall) * self.goal_distance_to_goal_angle + 1/4
+                if goal_angle < 1/8:
+                    goal_angle = 1/8
+                if goal_angle > 3/8:
+                    goal_angle = 3/8
+                if self.side == "right":
+                    goal_angle = 1 - goal_angle
+                angle_diff = angle_to_wall - goal_angle
+                angular_velocity = self.MAX_ANGULAR_SPEED * angle_diff * self.approach_wall_constant
+                if np.abs(angular_velocity) > self.MAX_ANGULAR_SPEED:
+                    angular_velocity = self.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
+                linear_velocity *= np.interp(np.abs(angle_diff), [0, self.angle_offset_for_zero_speed], [1, 0])
+                if linear_velocity < 0:
+                    linear_velocity = 0
+                if self.side == "left":
+                    angular_velocity = -angular_velocity
+                rospy.loginfo("not at goal distance from wall. goal angle: {}, current_angle: {:.3f}".format(goal_angle, angle_to_wall))
+            else:
+                proportional_distance = (lead_avg - trailing_avg) / (lead_avg + trailing_avg) * self.wall_maintain_constant
+                angular_velocity = -proportional_distance
+
+                if lead_avg == 0:
+                    angular_velocity = -self.MAX_ANGULAR_SPEED
+                if trailing_avg == 0:
+                    angular_velocity = self.MAX_ANGULAR_SPEED
+                rospy.loginfo("at goal distance from wall. angular velocity: {:.4f}, lead: {:.4f}, trailing: {:.4f}".format(angular_velocity, lead_avg, trailing_avg))
+                linear_velocity *= np.interp(np.abs(angular_velocity), [0, self.MAX_ANGULAR_SPEED], [1, 0.1])
+                if linear_velocity < 0:
+                    linear_velocity = 0
+            if np.abs(angular_velocity) > self.MAX_ANGULAR_SPEED:
+                angular_velocity = self.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
         else:
-            return 0
+            rospy.loginfo(self.side)
+            rospy.logwarn("No closest point on a wall found or lead and trailing avgs are zero. Going Straight.")
+            rospy.loginfo("lead_avg: {}".format(lead_avg))
+            rospy.loginfo("trailing_avg: {}".format(trailing_avg))
+            linear_velocity *= self.lost_robot_speed_multiplier
+            angular_velocity = 0
 
-        if lead_avg + trailing_avg == 0:
-            rospy.loginfo("no data")
-            return 0
+        if self.side == 'left':
+            angular_velocity = -angular_velocity
 
-        if not self.WALL_FOLLOW_DISTANCE - 0.1 < lead_avg < self.WALL_FOLLOW_DISTANCE + 0.1:
-            goal_angle = (self.WALL_FOLLOW_DISTANCE - distance_to_wall) * self.wall_distance_constant + 1/4
-            if goal_angle < 1/8:
-                goal_angle = 1/8
-            if goal_angle > 3/8:
-                goal_angle = 3/8
-            if wall_direction == "right":
-                goal_angle = 1 - goal_angle
+        rospy.loginfo("angular velocity {:.4f}".format(angular_velocity))
+        return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
 
-            angular_velocity = self.MAX_ANGULAR_SPEED * (angle_to_wall - goal_angle) / (3/8)
-        else:
-            proportional_distance = (lead_avg - trailing_avg) / (lead_avg + trailing_avg)
-            angular_velocity = -proportional_distance
-            rospy.loginfo("correct distance: {:.4f} lead: {:.4f}, trailing: {:.4f}".format(angular_velocity, lead_avg, trailing_avg))
-        if np.abs(angular_velocity) > self.MAX_ANGULAR_SPEED:
-            angular_velocity = self.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
-        return angular_velocity
 
     def get_point_to_wall(self):
         """If we're close to a wall, return the point closest to us on the wall."""
-
+        if not self.filtered_points:
+            return False
         closest_point = min(self.filtered_points)
         theta = closest_point.angle_degrees
 
-        # Constructs a second line 5 degrees off, checks to see if it forms proper right triangle
-        dist_hyp = self.points[(theta+5)%360].length
-        dist_opp = np.tan(np.radians(5)/closest_point.length)
-        if abs(np.sqrt(closest_point.length**2 + dist_opp**2) - dist_hyp) <= self.angle_wall_tolerance:
-            rospy.loginfo('Close enough -- wall detected')
-            return closest_point
-        else:
-            rospy.loginfo('False alarm -- no wall detected')
-            return False
+        return closest_point
 
+        # # Constructs a second line 5 degrees off, checks to see if it forms proper right triangle
+        # dist_hyp = self.points[(theta+5)%360].length
+        # dist_opp = np.tan(np.radians(5)/closest_point.length)
+        # if abs(np.sqrt(closest_point.length**2 + dist_opp**2) - dist_hyp) <= self.angle_wall_tolerance:
+        #     # rospy.loginfo('Close enough -- wall detected')
+        #     return closest_point
+        # else:
+        #     # rospy.loginfo('False alarm -- no wall detected')
+        #     return False
 
     def is_in_danger_zone(self, point):
         a = self.DANGER_ZONE_LENGTH * sin(point.angle_radians)
@@ -620,6 +643,9 @@ class Controller:
         self.running = True
         dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=5, config_callback=self.dynamic_reconfigure_callback)
         rate = rospy.Rate(20)
+        while not self.points:
+            rate.sleep()
+            rospy.loginfo("no points yet")
         while not rospy.is_shutdown() and self.running:
             cmd_vel = self.get_cmd_vel()
             self.pub.publish(cmd_vel)
@@ -640,6 +666,13 @@ class Controller:
         self.WALL_FOLLOW_DISTANCE = config["wall_follow_distance"]
         self.ROOM_CENTER_CUTOFF = config["room_center_cutoff"]
         self.room_center_number_points = config["room_center_number_points"]
+        self.angle_wall_tolerance = config["angle_wall_tolerance"]
+        self.num_wall_points = config["num_wall_points"]
+        self.approach_wall_constant = config["approach_wall_constant"]
+        self.angle_offset_for_zero_speed = config["angle_offset_for_zero_speed"]
+        self.wall_maintain_constant = config["wall_maintain_constant"]
+        self.lost_robot_speed_multiplier = config["lost_robot_speed_multiplier"]
+        self.goal_distance_to_goal_angle = config["goal_distance_to_goal_angle"]
         rospy.loginfo(config)
 
 def main(args):
@@ -647,10 +680,8 @@ def main(args):
     # ic = ImageConverter()
     rescuebot = Controller()
     # star_center = OccupancyGridMapper()
-    time.sleep(2)
     try:
         rescuebot.run()
-        rospy.spin()
     except rospy.ROSInterruptException:
         pass
 
