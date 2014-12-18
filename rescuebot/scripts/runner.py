@@ -29,7 +29,6 @@ class OccupancyGridMapper:
 
     def __init__(self):
         cv2.namedWindow("map")
-        print 'Running'
 
         #Establish mapping conventions
         self.origin = [-10, -10]
@@ -98,6 +97,7 @@ class OccupancyGridMapper:
         self.y_camera_green = -1
         self.x_camera_yellow = -1
         self.y_camera_yellow = -1
+        rospy.loginfo('Mapper running')
 
     def is_in_map(self, x_ind, y_ind):
         """ Return whether or not the given point is within the map boundaries """
@@ -347,9 +347,6 @@ class Output:
         x_coord = np.median(self.yx)
         y_coord = np.median(self.yy)
 
-        print 'yellow'
-        print (x_coord,y_coord)
-
     def find_green(self, msg):
         x = msg.x
         y = msg.y
@@ -362,9 +359,6 @@ class Output:
 
         x_coord = np.median(self.gx)
         y_coord = np.median(self.gy)
-
-        print 'green'
-        print (x_coord,y_coord)
 
     def find_red(self, msg):
         x = msg.x
@@ -379,9 +373,6 @@ class Output:
         x_coord = np.median(self.rx)
         y_coord = np.median(self.ry)
 
-        print 'red'
-        print (x_coord,y_coord)
-
     def find_blue(self, msg):
         x = msg.x
         y = msg.y
@@ -395,8 +386,6 @@ class Output:
         x_coord = np.median(self.bx)
         y_coord = np.median(self.by)
 
-        print 'blue'
-        print (x_coord,y_coord)
 
 class ImageConverter:
     def __init__(self):
@@ -542,7 +531,7 @@ class Controller:
 
         self.MAX_LINEAR_SPEED = 0.04
         self.MAX_ANGULAR_SPEED = .28
-        self.DANGER_ZONE_LENGTH = 1.0
+        self.danger_zone_length = 1.0
         self.DANGER_ZONE_WIDTH = 0.5
         self.DANGER_POINTS_MULTIPLIER = 1/50.0
         self.WALL_FOLLOW_DISTANCE = .5
@@ -698,9 +687,9 @@ class Controller:
         #     return False
 
     def is_in_danger_zone(self, point):
-        a = self.DANGER_ZONE_LENGTH * sin(point.angle_radians)
+        a = self.danger_zone_length * sin(point.angle_radians)
         b = self.DANGER_ZONE_WIDTH * cos(point.angle_radians)
-        max_radius = (self.DANGER_ZONE_LENGTH * self.DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
+        max_radius = (self.danger_zone_length * self.DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
         return point.length < max_radius and point.is_in_front()
 
     def get_danger_points(self):
@@ -759,38 +748,18 @@ class Controller:
 
     def obstacle_avoid(self):
         danger_points = self.get_danger_points()
-        left_danger_points = [point for point in danger_points if point.is_in_front_left()]
-        right_danger_points = [point for point in danger_points if point.is_in_front_right()]
 
         if not danger_points:
-            self.get_cmd_vel = self.follow_wall
-            return self.follow_wall()
-
-        if len(left_danger_points) > len(right_danger_points):
-            turn_towards = "right"
-            danger_points = left_danger_points
+            return self.MAX_LINEAR_SPEED
         else:
-            turn_towards = "left"
-            danger_points = right_danger_points
+            closest_point = min(danger_points)
 
-        num_danger_points = len(danger_points)
-        closest_point = min(danger_points)
+            linear_velocity_scaling = np.interp(closest_point.length, [self.danger_zone_length, self.danger_zone_length + 1.0], [0, 1])
+            linear_velocity_scaling = np.min([linear_velocity_scaling, 1])
+            linear_velocity = self.MAX_LINEAR_SPEED * linear_velocity_scaling
+            rospy.loginfo("Obstacle avoid says, \"only go {} mps!\"".format(linear_velocity))
 
-        linear_velocity_scaling = np.interp(closest_point.length, [.25, 0.7], [-0.6, 1])
-        linear_velocity_scaling = np.min([linear_velocity_scaling, 1])
-        linear_velocity = Vector3(x=self.MAX_LINEAR_SPEED * linear_velocity_scaling)
-
-        angular_velocity_scaling = np.interp(closest_point.length, [.25, 0.7], [1, 0.5])
-        angular_velocity_scaling = np.max(angular_velocity_scaling, 0.5)
-
-        angular_velocity = angular_velocity_scaling * self.MAX_ANGULAR_SPEED
-
-        if turn_towards == "right":
-            angular_velocity *= -1
-
-        angular_velocity = Vector3(z=angular_velocity)
-        rospy.loginfo("obstacle avoid ")
-        return linear_velocity
+            return linear_velocity
 
     def run(self):
         """Subscribe to the laser scan data and images."""
@@ -822,7 +791,7 @@ class Controller:
     def dynamic_reconfigure_callback(self, config):
         self.MAX_LINEAR_SPEED = config["max_linear_speed"]
         self.MAX_ANGULAR_SPEED = config["max_angular_speed"]
-        self.DANGER_ZONE_LENGTH = config["danger_zone_length"]
+        self.danger_zone_length = config["danger_zone_length"]
         self.DANGER_ZONE_WIDTH = config["danger_zone_width"]
         self.DANGER_POINTS_MULTIPLIER = config["danger_points_multiplier"]
         self.WALL_FOLLOW_DISTANCE = config["wall_follow_distance"]
