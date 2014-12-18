@@ -24,6 +24,60 @@ import os.path
 
 saved_config_file_name = os.path.join(os.path.dirname(__file__), "saved_configuration.txt")
 
+
+class Configuration:
+    def __init__(self):
+        reconfigure_client = dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=5, config_callback=self.dynamic_reconfigure_callback)
+        try:
+            with open(saved_config_file_name, 'r') as config_file:
+                config = pickle.load(config_file)
+                reconfigure_client.update_configuration(config)
+                rospy.loginfo("Reconfiguring using saved configuration file.")
+        except EnvironmentError:
+            rospy.loginfo("No saved configuration file found. Using defaults.")
+
+    def dynamic_reconfigure_callback(self, config):
+        self.MAX_LINEAR_SPEED = config["max_linear_speed"]
+        self.MAX_ANGULAR_SPEED = config["max_angular_speed"]
+        self.danger_zone_length = config["danger_zone_length"]
+        self.DANGER_ZONE_WIDTH = config["danger_zone_width"]
+        self.DANGER_POINTS_MULTIPLIER = config["danger_points_multiplier"]
+        self.WALL_FOLLOW_DISTANCE = config["wall_follow_distance"]
+        self.ROOM_CENTER_CUTOFF = config["room_center_cutoff"]
+        self.room_center_number_points = config["room_center_number_points"]
+        self.angle_wall_tolerance = config["angle_wall_tolerance"]
+        self.wall_follow_measurement_width = config["wall_follow_measurement_width"]
+        self.approach_wall_constant = config["approach_wall_constant"]
+        self.angle_offset_for_zero_speed = config["angle_offset_for_zero_speed"]
+        self.wall_maintain_constant = config["wall_maintain_constant"]
+        self.lost_robot_speed_multiplier = config["lost_robot_speed_multiplier"]
+        self.goal_distance_to_goal_angle = config["goal_distance_to_goal_angle"]
+        self.lower_yellow_s = config["lower_yellow_s"]
+        self.lower_yellow_v = config["lower_yellow_v"]
+        self.upper_yellow_s = config["upper_yellow_s"]
+        self.upper_yellow_v = config["upper_yellow_v"]
+        self.lower_blue_s = config["lower_blue_s"]
+        self.lower_blue_v = config["lower_blue_v"]
+        self.upper_blue_s = config["upper_blue_s"]
+        self.upper_blue_v = config["upper_blue_v"]
+        self.lower_red_s = config["lower_red_s"]
+        self.lower_red_v = config["lower_red_v"]
+        self.upper_red_s = config["upper_red_s"]
+        self.upper_red_v = config["upper_red_v"]
+        self.lower_green_s = config["lower_green_s"]
+        self.lower_green_v = config["lower_green_v"]
+        self.upper_green_s = config["upper_green_s"]
+        self.upper_green_v = config["upper_green_v"]
+
+        lower_green = np.array([40, 0, 0])
+        upper_green = np.array([100, 255, 255])
+        with open(saved_config_file_name, 'w') as f:
+            if "groups" in config:
+                del config["groups"]
+            pickle.dump(config, f)
+            rospy.loginfo("saving configuration file after receiving new configuration")
+
+
 class OccupancyGridMapper:
     """ Implements simple occupancy grid mapping """
 
@@ -205,11 +259,11 @@ class OccupancyGridMapper:
 
         if self.depth_red > 0:
             self.y_camera_red = int(x_odom_index - self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
-            self.x_camera_red = int(y_odom_index - self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
+            self.x_camera_red = int(y_odom_index - self.depth_red * -sin(self.angle_diff_red + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_red, self.y_camera_red), 1, self.red)
 
             real_red_y = self.depth_red * cos(self.angle_diff_red + pi - self.odom_pose[2])
-            real_red_x = self.depth_red * sin(self.angle_diff_red + pi - self.odom_pose[2])
+            real_red_x = self.depth_red * -sin(self.angle_diff_red + pi - self.odom_pose[2])
 
             self.rcoor_pub.publish(Vector3(-real_red_x, -real_red_y/2, 0))
         else:
@@ -217,11 +271,11 @@ class OccupancyGridMapper:
 
         if self.depth_blue > 0:
             self.y_camera_blue = int(x_odom_index - self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
-            self.x_camera_blue = int(y_odom_index - self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
+            self.x_camera_blue = int(y_odom_index - self.depth_blue * -sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
 
             real_blue_y = self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])
-            real_blue_x = self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])
+            real_blue_x = self.depth_blue * -sin(self.angle_diff_blue + pi - self.odom_pose[2])
 
             self.bcoor_pub.publish(Vector3(-real_blue_x, -real_blue_y/2, 0))
         else:
@@ -229,21 +283,24 @@ class OccupancyGridMapper:
 
         if self.depth_green > 0:
             self.y_camera_green = int(x_odom_index - self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
-            self.x_camera_green = int(y_odom_index - self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
+            self.x_camera_green = int(y_odom_index - self.depth_green * -sin(self.angle_diff_green + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
             
             real_green_y = self.depth_green * cos(self.angle_diff_green + pi - self.odom_pose[2])
-            real_green_x = self.depth_green * sin(self.angle_diff_green + pi - self.odom_pose[2])
+            real_green_x = self.depth_green * -sin(self.angle_diff_green + pi - self.odom_pose[2])
 
             self.gcoor_pub.publish(Vector3(-real_green_x, -real_green_y/2, 0))
+        else:
+            cv2.circle(im, (self.x_camera_green, self.y_camera_green), 1, self.green)
+
 
         if self.depth_yellow > 0:
             self.y_camera_yellow = int(x_odom_index - self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
-            self.x_camera_yellow = int(y_odom_index - self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
+            self.x_camera_yellow = int(y_odom_index - self.depth_yellow * -sin(self.angle_diff_yellow + pi - self.odom_pose[2])/self.resolution)
             cv2.circle(im, (self.x_camera_yellow, self.y_camera_yellow), 1, self.yellow)
             
             real_yellow_y = self.depth_yellow * cos(self.angle_diff_yellow + pi - self.odom_pose[2])
-            real_yellow_x = self.depth_yellow * sin(self.angle_diff_yellow + pi - self.odom_pose[2])
+            real_yellow_x = self.depth_yellow * -sin(self.angle_diff_yellow + pi - self.odom_pose[2])
 
             self.ycoor_pub.publish(Vector3(-real_yellow_x, -real_yellow_y/2, 0))
         else:
@@ -388,7 +445,7 @@ class Output:
 
 
 class ImageConverter:
-    def __init__(self):
+    def __init__(self, configuration):
         #TODO Adjust publishers/subscribers so that can publish more than one color at a time
         self.image_pub = rospy.Publisher("/processed_image", Image)
         self.ball_pub_red= rospy.Publisher("/ball_coords_red", Vector3)
@@ -401,6 +458,7 @@ class ImageConverter:
         self.ball_location_green = None
         self.ball_location_yellow = None
         self.ball_location_blue = None
+        self.config = configuration
         print("Image converter initialized!")
 
     def callback(self, data):
@@ -410,9 +468,9 @@ class ImageConverter:
             print(e)
 
         #Image Processing
-        blur = cv2.medianBlur(cv_image, 15)
+        blur = cv2.medianBlur(cv_image, 13)
         gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 5, 50)
+        edges = cv2.Canny(gray, 5, 45)
         self.find_circles(edges, cv_image)
 
         try:
@@ -435,24 +493,24 @@ class ImageConverter:
                                    minRadius=40, maxRadius=100)
         hsv_img = cv2.cvtColor(img_out, cv2.COLOR_BGR2HSV)
 
-        lower_yellow = np.array([10, 200, 200])
-        upper_yellow = np.array([40, 255, 255])
+        lower_yellow = np.array([10, self.config.lower_yellow_s, self.config.lower_yellow_v])
+        upper_yellow = np.array([40, self.config.upper_yellow_s, self.config.upper_yellow_v])
         mask_yellow = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
 
-        lower_blue = np.array([100, 0, 0])
-        upper_blue = np.array([200, 255, 255])
+        lower_blue = np.array([100, self.config.lower_blue_s, self.config.lower_blue_v])
+        upper_blue = np.array([200, self.config.upper_blue_s, self.config.upper_blue_v])
         mask_blue = cv2.inRange(hsv_img, lower_blue, upper_blue)
 
-        lower_red = np.array([0, 200, 100])
-        upper_red = np.array([15, 255, 200])
+        lower_red = np.array([0, self.config.lower_red_s, self.config.lower_red_v])
+        upper_red = np.array([15, self.config.upper_red_s, self.config.upper_red_v])
         mask_red = cv2.inRange(hsv_img, lower_red, upper_red)
 
-        lower_green = np.array([50, 0, 0])
-        upper_green = np.array([90, 255, 255])
+        lower_green = np.array([40, self.config.lower_green_s, self.config.lower_green_v])
+        upper_green = np.array([100, self.config.upper_green_s, self.config.upper_green_v])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
 
-        # cv2.imshow('yellow', mask_yellow)
+        cv2.imshow('yellow', mask_yellow)
 
         if circles is not None:
             for c in circles[0, :]:
@@ -522,7 +580,7 @@ class ImageConverter:
 
 
 class Controller:
-    def __init__(self):
+    def __init__(self, configuration):
         #rospy.init_node('controller', anonymous=True)
         self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
         self.bridge = cv_bridge.CvBridge()
@@ -531,21 +589,7 @@ class Controller:
         signal.signal(signal.SIGINT, self.stop_neato)
         rospy.Subscriber("scan", LaserScan, self.laser_scan_received, queue_size=1)
 
-        self.MAX_LINEAR_SPEED = 0.04
-        self.MAX_ANGULAR_SPEED = .28
-        self.danger_zone_length = 1.0
-        self.DANGER_ZONE_WIDTH = 0.5
-        self.DANGER_POINTS_MULTIPLIER = 1/50.0
-        self.WALL_FOLLOW_DISTANCE = .5
-        self.ROOM_CENTER_CUTOFF = 0.5
-        self.room_center_number_points = 60
-        self.angle_wall_tolerance = 0.1
-        self.goal_distance_to_goal_angle = 0.5
-        self.wall_follow_measurement_width = 5
-        self.approach_wall_constant = 8
-        self.angle_offset_for_zero_speed = 1/8
-        self.wall_maintain_constant = 1
-        self.lost_robot_speed_multiplier = 0.5
+        self.config = configuration
 
         self.side = None
         self.lead_left_avg = 0
@@ -593,14 +637,14 @@ class Controller:
 
     def follow_wall(self):
 
-        linear_velocity = self.MAX_LINEAR_SPEED
+        linear_velocity = self.config.MAX_LINEAR_SPEED
 
         if self.side == 'right':
             # rospy.loginfo('right')
             lead_avg = self.lead_right_avg
             trailing_avg = self.trailing_right_avg
         elif self.side == 'left':
-            rospy.loginfo('left')
+            # rospy.loginfo('left')
             lead_avg = self.lead_left_avg
             trailing_avg = self.trailing_left_avg
         else:
@@ -611,8 +655,8 @@ class Controller:
         if point_to_wall and lead_avg + trailing_avg != 0:
             angle_to_wall = point_to_wall.angle_radians / (2 * pi)
             distance_to_wall = point_to_wall.length
-            if not self.WALL_FOLLOW_DISTANCE - 0.1 < distance_to_wall < self.WALL_FOLLOW_DISTANCE + 0.1:
-                goal_angle = (self.WALL_FOLLOW_DISTANCE - distance_to_wall) * self.goal_distance_to_goal_angle + 1/4
+            if not self.config.WALL_FOLLOW_DISTANCE - 0.1 < distance_to_wall < self.config.WALL_FOLLOW_DISTANCE + 0.1:
+                goal_angle = (self.config.WALL_FOLLOW_DISTANCE - distance_to_wall) * self.config.goal_distance_to_goal_angle + 1/4
                 if goal_angle < 1/8:
                     goal_angle = 1/8
                 if goal_angle > 3/8:
@@ -620,54 +664,54 @@ class Controller:
                 if self.side == "right":
                     goal_angle = 1 - goal_angle
                 angle_diff = angle_to_wall - goal_angle
-                angular_velocity = self.MAX_ANGULAR_SPEED * angle_diff * self.approach_wall_constant
-                if np.abs(angular_velocity) > self.MAX_ANGULAR_SPEED:
-                    angular_velocity = self.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
-                linear_velocity *= np.interp(np.abs(angle_diff), [0, self.angle_offset_for_zero_speed], [1, 0])
+                angular_velocity = self.config.MAX_ANGULAR_SPEED * angle_diff * self.config.approach_wall_constant
+                if np.abs(angular_velocity) > self.config.MAX_ANGULAR_SPEED:
+                    angular_velocity = self.config.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
+                linear_velocity *= np.interp(np.abs(angle_diff), [0, self.config.angle_offset_for_zero_speed], [1, 0])
                 if linear_velocity < 0:
                     linear_velocity = 0
                 if self.side == "left":
                     angular_velocity = -angular_velocity
-                rospy.loginfo("not at goal distance from wall. goal angle: {}, current_angle: {:.3f}".format(goal_angle, angle_to_wall))
+                # rospy.loginfo("not at goal distance from wall. goal angle: {}, current_angle: {:.3f}".format(goal_angle, angle_to_wall))
             else:
-                proportional_distance = (lead_avg - trailing_avg) / (lead_avg + trailing_avg) * self.wall_maintain_constant
+                proportional_distance = (lead_avg - trailing_avg) / (lead_avg + trailing_avg) * self.config.wall_maintain_constant
                 angular_velocity = -proportional_distance
 
                 if lead_avg == 0:
-                    angular_velocity = -self.MAX_ANGULAR_SPEED
+                    angular_velocity = -self.config.MAX_ANGULAR_SPEED
                 if trailing_avg == 0:
-                    angular_velocity = self.MAX_ANGULAR_SPEED
-                rospy.loginfo("at goal distance from wall. angular velocity: {:.4f}, lead: {:.4f}, trailing: {:.4f}".format(angular_velocity, lead_avg, trailing_avg))
-                linear_velocity *= np.interp(np.abs(angular_velocity), [0, self.MAX_ANGULAR_SPEED], [1, 0.1])
+                    angular_velocity = self.config.MAX_ANGULAR_SPEED
+                # rospy.loginfo("at goal distance from wall. angular velocity: {:.4f}, lead: {:.4f}, trailing: {:.4f}".format(angular_velocity, lead_avg, trailing_avg))
+                linear_velocity *= np.interp(np.abs(angular_velocity), [0, self.config.MAX_ANGULAR_SPEED], [1, 0.1])
                 if linear_velocity < 0:
                     linear_velocity = 0
-            if np.abs(angular_velocity) > self.MAX_ANGULAR_SPEED:
-                angular_velocity = self.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
+            if np.abs(angular_velocity) > self.config.MAX_ANGULAR_SPEED:
+                angular_velocity = self.config.MAX_ANGULAR_SPEED * np.sign(angular_velocity)
         else:
             rospy.loginfo(self.side)
-            rospy.logwarn("No closest point on a wall found or lead and trailing avgs are zero. Going Straight.")
-            rospy.loginfo("lead_avg: {}".format(lead_avg))
-            rospy.loginfo("trailing_avg: {}".format(trailing_avg))
-            linear_velocity *= self.lost_robot_speed_multiplier
+            # rospy.logwarn("No closest point on a wall found or lead and trailing avgs are zero. Going Straight.")
+            # rospy.loginfo("lead_avg: {}".format(lead_avg))
+            # rospy.loginfo("trailing_avg: {}".format(trailing_avg))
+            linear_velocity *= self.config.lost_robot_speed_multiplier
             angular_velocity = 0
 
         if self.side == 'left':
             angular_velocity = -angular_velocity
 
-        rospy.loginfo("angular velocity {:.4f}".format(angular_velocity))
+        # rospy.loginfo("angular velocity {:.4f}".format(angular_velocity))
         return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
 
     def get_lead_left_points(self):
-        return [point for point in self.filtered_points if 1/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 1/8 + self.wall_follow_measurement_width]
+        return [point for point in self.filtered_points if 1/8 - self.config.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 1/8 + self.config.wall_follow_measurement_width]
 
     def get_trailing_left_points(self):
-        return [point for point in self.filtered_points if 3/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 3/8 + self.wall_follow_measurement_width]
+        return [point for point in self.filtered_points if 3/8 - self.config.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 3/8 + self.config.wall_follow_measurement_width]
 
     def get_trailing_right_points(self):
-        return [point for point in self.filtered_points if 5/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 5/8 + self.wall_follow_measurement_width]
+        return [point for point in self.filtered_points if 5/8 - self.config.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 5/8 + self.config.wall_follow_measurement_width]
 
     def get_lead_right_points(self):
-        return [point for point in self.filtered_points if 7/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 7/8 + self.wall_follow_measurement_width]
+        return [point for point in self.filtered_points if 7/8 - self.config.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 7/8 + self.config.wall_follow_measurement_width]
 
     def get_point_to_wall(self):
         """If we're close to a wall, return the point closest to us on the wall."""
@@ -689,9 +733,9 @@ class Controller:
         #     return False
 
     def is_in_danger_zone(self, point):
-        a = self.danger_zone_length * sin(point.angle_radians)
-        b = self.DANGER_ZONE_WIDTH * cos(point.angle_radians)
-        max_radius = (self.danger_zone_length * self.DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
+        a = self.config.danger_zone_length * sin(point.angle_radians)
+        b = self.config.DANGER_ZONE_WIDTH * cos(point.angle_radians)
+        max_radius = (self.config.danger_zone_length * self.config.DANGER_ZONE_WIDTH) / sqrt(a**2 + b**2)
         return point.length < max_radius and point.is_in_front()
 
     def get_danger_points(self):
@@ -702,10 +746,10 @@ class Controller:
         Go to the center of the room.
         """
         std_dev = np.std([point.length for point in self.filtered_points])
-        if std_dev < self.ROOM_CENTER_CUTOFF:
+        if std_dev < self.config.ROOM_CENTER_CUTOFF:
             self.get_cmd_vel = self.start_360()
             return self.start_360()
-        closest_points = sorted(self.filtered_points)[:self.room_center_number_points]
+        closest_points = sorted(self.filtered_points)[:self.config.room_center_number_points]
         angles = [point.angle_radians for point in closest_points]
         imaginary_numbers = [np.exp(angle*1j) for angle in angles]
         angle_mean = np.angle(np.mean(imaginary_numbers))
@@ -714,16 +758,16 @@ class Controller:
 
         angle = angle_mean / (2 * pi)
         if angle < 1/2:
-            linear_velocity = np.interp(angle, [0, 1/2], [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED])
+            linear_velocity = np.interp(angle, [0, 1/2], [-self.config.MAX_LINEAR_SPEED, self.config.MAX_LINEAR_SPEED])
         else:
-            linear_velocity = np.interp(angle, [1/2, 1], [self.MAX_LINEAR_SPEED, -self.MAX_LINEAR_SPEED])
+            linear_velocity = np.interp(angle, [1/2, 1], [self.config.MAX_LINEAR_SPEED, -self.config.MAX_LINEAR_SPEED])
 
         if 1/4 < angle < 3/4:
-            angular_velocity = np.interp(angle, [1/4, 3/4], [-self.MAX_ANGULAR_SPEED, self.MAX_ANGULAR_SPEED])
+            angular_velocity = np.interp(angle, [1/4, 3/4], [-self.config.MAX_ANGULAR_SPEED, self.config.MAX_ANGULAR_SPEED])
         elif 0 <= angle <= 1/4:
-            angular_velocity = np.interp(angle, [0, 1/4], [0, self.MAX_ANGULAR_SPEED])
+            angular_velocity = np.interp(angle, [0, 1/4], [0, self.config.MAX_ANGULAR_SPEED])
         else:
-            angular_velocity = np.interp(angle, [3/4, 1], [-self.MAX_ANGULAR_SPEED, 0])
+            angular_velocity = np.interp(angle, [3/4, 1], [-self.config.MAX_ANGULAR_SPEED, 0])
 
         cmd_vel = Twist()
         cmd_vel.angular.z = angular_velocity
@@ -741,24 +785,24 @@ class Controller:
         Turn around a full 360 degrees, then wall follow.
         """
         self.time+=1
-        if self.time > 130 / self.MAX_ANGULAR_SPEED:
+        if self.time > 130 / self.config.MAX_ANGULAR_SPEED:
             self.get_cmd_vel = self.follow_wall
             return self.follow_wall()
         t = Twist()
-        t.angular.z = self.MAX_ANGULAR_SPEED
+        t.angular.z = self.config.MAX_ANGULAR_SPEED
         return t
 
     def obstacle_avoid(self):
         danger_points = self.get_danger_points()
 
         if not danger_points:
-            return self.MAX_LINEAR_SPEED
+            return self.config.MAX_LINEAR_SPEED
         else:
             closest_point = min(danger_points)
 
-            linear_velocity_scaling = np.interp(closest_point.length, [self.danger_zone_length, self.danger_zone_length + 1.0], [0, 1])
+            linear_velocity_scaling = np.interp(closest_point.length, [self.config.danger_zone_length, self.config.danger_zone_length + 1.0], [0, 1])
             linear_velocity_scaling = np.min([linear_velocity_scaling, 1])
-            linear_velocity = self.MAX_LINEAR_SPEED * linear_velocity_scaling
+            linear_velocity = self.config.MAX_LINEAR_SPEED * linear_velocity_scaling
             rospy.loginfo("Obstacle avoid says, \"only go {} mps!\"".format(linear_velocity))
 
             return linear_velocity
@@ -766,14 +810,6 @@ class Controller:
     def run(self):
         """Subscribe to the laser scan data and images."""
         self.running = True
-        reconfigure_client = dynamic_reconfigure.client.Client("dynamic_reconfigure_server", timeout=5, config_callback=self.dynamic_reconfigure_callback)
-        try:
-            with open(saved_config_file_name, 'r') as config_file:
-                config = pickle.load(config_file)
-                reconfigure_client.update_configuration(config)
-                rospy.loginfo("Reconfiguring using saved configuration file.")
-        except EnvironmentError:
-            rospy.loginfo("No saved configuration file found. Using defaults.")
 
         rate = rospy.Rate(20)
         while not self.points:
@@ -790,33 +826,12 @@ class Controller:
         self.pub.publish(Twist())
         sys.exit(0)
 
-    def dynamic_reconfigure_callback(self, config):
-        self.MAX_LINEAR_SPEED = config["max_linear_speed"]
-        self.MAX_ANGULAR_SPEED = config["max_angular_speed"]
-        self.danger_zone_length = config["danger_zone_length"]
-        self.DANGER_ZONE_WIDTH = config["danger_zone_width"]
-        self.DANGER_POINTS_MULTIPLIER = config["danger_points_multiplier"]
-        self.WALL_FOLLOW_DISTANCE = config["wall_follow_distance"]
-        self.ROOM_CENTER_CUTOFF = config["room_center_cutoff"]
-        self.room_center_number_points = config["room_center_number_points"]
-        self.angle_wall_tolerance = config["angle_wall_tolerance"]
-        self.wall_follow_measurement_width = config["wall_follow_measurement_width"]
-        self.approach_wall_constant = config["approach_wall_constant"]
-        self.angle_offset_for_zero_speed = config["angle_offset_for_zero_speed"]
-        self.wall_maintain_constant = config["wall_maintain_constant"]
-        self.lost_robot_speed_multiplier = config["lost_robot_speed_multiplier"]
-        self.goal_distance_to_goal_angle = config["goal_distance_to_goal_angle"]
-        with open(saved_config_file_name, 'w') as f:
-            if "groups" in config:
-                del config["groups"]
-            pickle.dump(config, f)
-            rospy.loginfo("saving configuration file after receiving new configuration")
-
 
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
-    ic = ImageConverter()
-    rescuebot = Controller()
+    configuration = Configuration()
+    ic = ImageConverter(configuration)
+    rescuebot = Controller(configuration)
     star_center = OccupancyGridMapper()
     final_coords = Output()
     try:
