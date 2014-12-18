@@ -421,7 +421,7 @@ class Controller:
         self.room_center_number_points = 60
         self.angle_wall_tolerance = 0.1
         self.goal_distance_to_goal_angle = 0.5
-        self.num_wall_points = 5
+        self.wall_follow_measurement_width = 5
         self.approach_wall_constant = 8
         self.angle_offset_for_zero_speed = 1/8
         self.wall_maintain_constant = 1
@@ -433,7 +433,7 @@ class Controller:
         self.trailing_left_avg = 0
         self.trailing_right_avg = 0
 
-        self.get_cmd_vel = self.follow_wall
+        self.get_cmd_vel = self.room_center
 
         self.points = []
         self.filtered_points = []
@@ -445,15 +445,15 @@ class Controller:
         self.filtered_points = filter_points(self.points)
 
         # Process some of the data
-        lead_left_distance = laser_scan_message.ranges[50 - self.num_wall_points:50 + self.num_wall_points]
-        trailing_left_distance = laser_scan_message.ranges[130 - self.num_wall_points:130 + self.num_wall_points]
-        trailing_right_distance = laser_scan_message.ranges[230 - self.num_wall_points:230 + self.num_wall_points]
-        lead_right_distance = laser_scan_message.ranges[310 - self.num_wall_points:310 + self.num_wall_points]
+        lead_left_points = self.get_lead_left_points()
+        trailing_left_points = self.get_trailing_left_points()
+        trailing_right_points = self.get_trailing_right_points()
+        lead_right_points = self.get_lead_right_points()
 
-        self.lead_left_avg = np.mean(lead_left_distance)
-        self.trailing_left_avg = np.mean(trailing_left_distance)
-        self.lead_right_avg = np.mean(lead_right_distance)
-        self.trailing_right_avg = np.mean(trailing_right_distance)
+        self.lead_left_avg = np.mean([point.length for point in lead_left_points])
+        self.trailing_left_avg = np.mean([point.length for point in trailing_left_points])
+        self.lead_right_avg = np.mean([point.length for point in lead_right_points])
+        self.trailing_right_avg = np.mean([point.length for point in trailing_right_points])
 
         wall_point = self.get_point_to_wall()
         if wall_point:
@@ -534,6 +534,17 @@ class Controller:
         rospy.loginfo("angular velocity {:.4f}".format(angular_velocity))
         return Twist(Vector3(linear_velocity, 0.0, 0.0), Vector3(0.0, 0.0, angular_velocity))
 
+    def get_lead_left_points(self):
+        return [point for point in self.filtered_points if 1/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 1/8 + self.wall_follow_measurement_width]
+
+    def get_trailing_left_points(self):
+        return [point for point in self.filtered_points if 3/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 3/8 + self.wall_follow_measurement_width]
+
+    def get_trailing_right_points(self):
+        return [point for point in self.filtered_points if 5/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 5/8 + self.wall_follow_measurement_width]
+
+    def get_lead_right_points(self):
+        return [point for point in self.filtered_points if 7/8 - self.wall_follow_measurement_width < point.angle_radians / (2 * pi) < 7/8 + self.wall_follow_measurement_width]
 
     def get_point_to_wall(self):
         """If we're close to a wall, return the point closest to us on the wall."""
@@ -667,7 +678,7 @@ class Controller:
         self.ROOM_CENTER_CUTOFF = config["room_center_cutoff"]
         self.room_center_number_points = config["room_center_number_points"]
         self.angle_wall_tolerance = config["angle_wall_tolerance"]
-        self.num_wall_points = config["num_wall_points"]
+        self.wall_follow_measurement_width = config["wall_follow_measurement_width"]
         self.approach_wall_constant = config["approach_wall_constant"]
         self.angle_offset_for_zero_speed = config["angle_offset_for_zero_speed"]
         self.wall_maintain_constant = config["wall_maintain_constant"]
