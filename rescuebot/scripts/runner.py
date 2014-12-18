@@ -597,7 +597,7 @@ class Controller:
         self.trailing_left_avg = 0
         self.trailing_right_avg = 0
 
-        self.get_cmd_vel = self.follow_wall
+        self.get_cmd_vel = self.room_center
 
         self.points = []
         self.filtered_points = []
