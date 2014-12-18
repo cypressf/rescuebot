@@ -13,8 +13,6 @@ def main():
 
 
 def reconfigure(config, level):
-    rospy.loginfo(config)
-
     return config  # Returns the updated configuration.
 
 if __name__ == '__main__':
