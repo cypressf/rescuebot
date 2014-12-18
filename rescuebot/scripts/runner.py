@@ -214,7 +214,7 @@ class OccupancyGridMapper:
         if self.depth_blue > 0:
             self.y_camera_blue = int(x_odom_index - self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
             self.x_camera_blue = int(y_odom_index - self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])/self.resolution)
-            cv2.circle(im, (100 - self.x_camera_blue, 100 - self.y_camera_blue), 1, self.blue)
+            cv2.circle(im, (self.x_camera_blue, self.y_camera_blue), 1, self.blue)
 
             real_blue_y = self.depth_blue * cos(self.angle_diff_blue + pi - self.odom_pose[2])
             real_blue_x = self.depth_blue * sin(self.angle_diff_blue + pi - self.odom_pose[2])
