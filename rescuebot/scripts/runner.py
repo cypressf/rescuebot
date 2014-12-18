@@ -442,22 +442,24 @@ class ImageConverter:
                                    minRadius=40, maxRadius=100)
         hsv_img = cv2.cvtColor(img_out, cv2.COLOR_BGR2HSV)
 
-        lower_red = np.array([0, 200, 150])
-        upper_red = np.array([25, 255, 255])
-        mask_red = cv2.inRange(hsv_img, lower_red, upper_red)
+        lower_yellow = np.array([10, 200, 200])
+        upper_yellow = np.array([40, 255, 255])
+        mask_yellow = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
 
         lower_blue = np.array([100, 0, 0])
         upper_blue = np.array([200, 255, 255])
         mask_blue = cv2.inRange(hsv_img, lower_blue, upper_blue)
 
-        lower_yellow = np.array([25, 200, 100])
-        upper_yellow = np.array([30, 255, 200])
-        mask_yellow = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
+        lower_red = np.array([0, 200, 100])
+        upper_red = np.array([15, 255, 200])
+        mask_red = cv2.inRange(hsv_img, lower_red, upper_red)
 
-        lower_green = np.array([60, 200, 100])
+        lower_green = np.array([50, 0, 0])
         upper_green = np.array([90, 255, 255])
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
+
+        cv2.imshow('yellow', mask_yellow)
 
         if circles is not None:
             for c in circles[0, :]:
@@ -477,7 +479,7 @@ class ImageConverter:
                 # draw the center of the circle
                 cv2.circle(img_out, (c[0], c[1]), 2, (0, 0, 255), 3)
 
-                if mean_yellow[0] > 150:
+                if mean_yellow[0] > 50:
                     #print mean
                     cv2.rectangle(img_out, (c[0] - c[2], c[1] + c[2]), (c[0] + c[2], c[1] - c[2]), (0, 255, 255), 2)
                     # draw the outer circle
