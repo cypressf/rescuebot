@@ -6,9 +6,12 @@ TAU = 2 * pi
 def ranges_to_points(ranges):
     points = []
     for angle, length in enumerate(ranges):
-        if length:
-            points.append(LaserPoint(length=length, angle=angle))
+        points.append(LaserPoint(length=length, angle=angle))
     return points
+
+
+def filter_points(points):
+    return [point for point in points if point.length != 0]
 
 
 class LaserPoint:
