@@ -124,7 +124,7 @@ class OccupancyGridMapper:
             if 0.0 < msg.ranges[i] < 5.0: #for any reding within 5 meters
                 #Using the pose and the measurement nd the angle, find it in the world
                 map_x = self.odom_pose[0] + msg.ranges[i] * cos(i * pi / 180.0 + self.odom_pose[2])
-                map_y = self.odom_pose[1] + msg.ranges[i] * -sin(i * pi / 180.0 + self.odom_pose[2])
+                map_y = self.odom_pose[1] + msg.ranges[i] * sin(i * pi / 180.0 + self.odom_pose[2])
 
                 #Relate that map measure with a place in the picture
                 x_detect = int((map_x - self.origin[0]) / self.resolution)
@@ -452,7 +452,7 @@ class ImageConverter:
         mask_green = cv2.inRange(hsv_img, lower_green, upper_green)
 
 
-        cv2.imshow('yellow', mask_yellow)
+        # cv2.imshow('yellow', mask_yellow)
 
         if circles is not None:
             for c in circles[0, :]:
